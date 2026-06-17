@@ -80,7 +80,7 @@ Bridge bacnet:bridge:local "BACnet/IP Network" [ broadcastAddress="192.168.1.255
 ## Installation
 
 **Option A – manual JAR (quickest):**
-Download `org.openhab.binding.bacnet-0.5.0.jar` from the
+Download `org.openhab.binding.bacnet-0.5.1.jar` from the
 [Releases](../../releases) page and drop it into your openHAB `addons` folder.
 
 **Option B – openHAB Community Marketplace:**
@@ -101,9 +101,18 @@ mvn clean install -pl :org.openhab.binding.bacnet -am -DskipTests
 ```
 
 The resulting bundle is at
-`bundles/org.openhab.binding.bacnet/target/org.openhab.binding.bacnet-0.5.0.jar`.
+`bundles/org.openhab.binding.bacnet/target/org.openhab.binding.bacnet-0.5.1.jar`.
 
 ## Changelog
+
+### 0.5.1
+
+- **Fix: binding did not register at all.** A `limitToOptions` attribute added to
+  the bridge config in 0.4.0 is not accepted by openHAB's thing-type XSD, which
+  made the whole `thing-types.xml` fail to parse — so no thing types or binding
+  info were registered and the binding never appeared in *Choose Binding*. The
+  attribute is removed; the interface drop-down still comes from the config option
+  provider.
 
 ### 0.5.0
 
