@@ -65,7 +65,7 @@ Bridge bacnet:bridge:local "BACnet/IP Network" [ broadcastAddress="192.168.1.255
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `broadcastAddress` | yes | – | Subnet broadcast address, e.g. `192.168.1.255` |
+| `broadcastAddress` | yes | – | Network to use — pick from the drop-down of local interfaces (YABE-style), or type a subnet broadcast such as `192.168.1.255` |
 | `localPort` | no | `47808` | UDP port to bind (BACnet default `0xBAC0`) |
 | `discoveryTimeout` | no | `5` | Seconds to listen for I-Am replies per scan |
 
@@ -78,7 +78,7 @@ Bridge bacnet:bridge:local "BACnet/IP Network" [ broadcastAddress="192.168.1.255
 ## Installation
 
 **Option A – manual JAR (quickest):**
-Download `org.openhab.binding.bacnet-0.3.0.jar` from the
+Download `org.openhab.binding.bacnet-0.4.0.jar` from the
 [Releases](../../releases) page and drop it into your openHAB `addons` folder.
 
 **Option B – openHAB Community Marketplace:**
@@ -99,9 +99,16 @@ mvn clean install -pl :org.openhab.binding.bacnet -am -DskipTests
 ```
 
 The resulting bundle is at
-`bundles/org.openhab.binding.bacnet/target/org.openhab.binding.bacnet-0.3.0.jar`.
+`bundles/org.openhab.binding.bacnet/target/org.openhab.binding.bacnet-0.4.0.jar`.
 
 ## Changelog
+
+### 0.4.0
+
+- **Network interface picker.** The bridge's *Network / Broadcast Address* field is
+  now a drop-down of this machine's network interfaces (like YABE), so you just pick
+  the network the BACnet devices are on instead of typing a broadcast address. Custom
+  values are still allowed.
 
 ### 0.3.0
 

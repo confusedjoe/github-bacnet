@@ -24,7 +24,9 @@ trigger channels. No external BACnet library is used (clean-room, EPL-compatible
 > against a BACnet/IP simulator; please report your results with real hardware in
 > this thread.
 >
-> **v0.3.0** adds **universal discovery**: besides Who-Is/I-Am, a scan now also
+> **v0.4.0** adds a **network-interface picker** in the bridge config (like YABE):
+> choose the network your devices are on from a drop-down of this machine's
+> interfaces. **v0.3.0** adds **universal discovery**: besides Who-Is/I-Am, a scan now also
 > sweeps the subnet with a unicast wildcard-instance ReadProperty and probes any IP
 > it has heard BACnet traffic from — so controllers that ignore Who-Is are still
 > found (verified against a real 223-object device). v0.2.0 fixed a critical
@@ -56,7 +58,7 @@ installation), start a scan from the console: `discovery start bacnet`.
 3. Schedule write is numeric (REAL) only.
 
 ## Download
-https://github.com/confusedjoe/github-bacnet/releases/download/v0.3.0/org.openhab.binding.bacnet-0.3.0.jar
+https://github.com/confusedjoe/github-bacnet/releases/download/v0.4.0/org.openhab.binding.bacnet-0.4.0.jar
 
 Source code: https://github.com/confusedjoe/github-bacnet
 

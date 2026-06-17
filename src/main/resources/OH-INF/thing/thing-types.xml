@@ -9,9 +9,10 @@
         <description>Represents the local BACnet/IP network and runs device discovery.</description>
 
         <config-description>
-            <parameter name="broadcastAddress" type="text" required="true">
-                <label>Broadcast Address</label>
-                <description>Subnet broadcast address, e.g. 192.168.134.255</description>
+            <parameter name="broadcastAddress" type="text" required="true" limitToOptions="false">
+                <label>Network / Broadcast Address</label>
+                <description>Select the network the BACnet devices are on (the list shows this machine's
+                    interfaces, like YABE), or type a subnet broadcast address such as 192.168.1.255.</description>
             </parameter>
             <parameter name="localPort" type="integer">
                 <label>Local Port</label>
