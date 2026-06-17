@@ -12,7 +12,7 @@
     </parent>
 
     <artifactId>org.openhab.binding.bacnet</artifactId>
-    <version>0.4.0</version>
+    <version>0.5.0</version>
 
     <name>openHAB Add-ons :: Bundles :: BACnet Binding</name>
 

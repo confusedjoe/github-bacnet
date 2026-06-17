@@ -110,6 +110,28 @@ public final class BACnetEnums {
         }
     }
 
+    /** Engineering units (BACnetEngineeringUnits) — symbol for the common ones. */
+    public static final class Units {
+        public static final int DEGREES_CELSIUS = 62;
+        public static final int DEGREES_KELVIN = 63;
+        public static final int DEGREES_FAHRENHEIT = 64;
+        public static final int PERCENT = 98;
+
+        private Units() {
+        }
+
+        /** Short symbol for a unit code, or "" if not mapped. */
+        public static String symbol(int u) {
+            switch (u) {
+                case DEGREES_CELSIUS: return "°C";
+                case DEGREES_KELVIN: return "K";
+                case DEGREES_FAHRENHEIT: return "°F";
+                case PERCENT: return "%";
+                default: return "";
+            }
+        }
+    }
+
     /** Event states (BACnetEventState). */
     public static final class EventState {
         public static final int NORMAL = 0;

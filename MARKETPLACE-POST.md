@@ -24,7 +24,8 @@ trigger channels. No external BACnet library is used (clean-room, EPL-compatible
 > against a BACnet/IP simulator; please report your results with real hardware in
 > this thread.
 >
-> **v0.4.0** adds a **network-interface picker** in the bridge config (like YABE):
+> **v0.5.0** labels channels with each object's real name + unit (e.g. `AU_Temp_H00 [°C]`),
+> read from the device — the same names YABE shows. **v0.4.0** adds a **network-interface picker** in the bridge config (like YABE):
 > choose the network your devices are on from a drop-down of this machine's
 > interfaces. **v0.3.0** adds **universal discovery**: besides Who-Is/I-Am, a scan now also
 > sweeps the subnet with a unicast wildcard-instance ReadProperty and probes any IP
@@ -58,7 +59,7 @@ installation), start a scan from the console: `discovery start bacnet`.
 3. Schedule write is numeric (REAL) only.
 
 ## Download
-https://github.com/confusedjoe/github-bacnet/releases/download/v0.4.0/org.openhab.binding.bacnet-0.4.0.jar
+https://github.com/confusedjoe/github-bacnet/releases/download/v0.5.0/org.openhab.binding.bacnet-0.5.0.jar
 
 Source code: https://github.com/confusedjoe/github-bacnet
 

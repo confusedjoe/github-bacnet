@@ -16,6 +16,8 @@ intrinsic alarms as trigger channels.
 - BACnet/IP (Annex J) over UDP, no external BACnet library
 - **Universal discovery**: Who-Is/I-Am **plus** a unicast subnet sweep and passive
   detection, so devices that never answer Who-Is are still found
+- Channels are labelled with each object's real **object-name and unit** (e.g.
+  `AU_Temp_H00 [°C]`), read from the device — like YABE, not cryptic ids
 - Read/write of present values: analog, binary and multi-state objects
 - Live updates via COV subscriptions (instead of pure polling)
 - Intrinsic alarms (event-state changes) exposed as trigger channels
@@ -78,7 +80,7 @@ Bridge bacnet:bridge:local "BACnet/IP Network" [ broadcastAddress="192.168.1.255
 ## Installation
 
 **Option A – manual JAR (quickest):**
-Download `org.openhab.binding.bacnet-0.4.0.jar` from the
+Download `org.openhab.binding.bacnet-0.5.0.jar` from the
 [Releases](../../releases) page and drop it into your openHAB `addons` folder.
 
 **Option B – openHAB Community Marketplace:**
@@ -99,9 +101,16 @@ mvn clean install -pl :org.openhab.binding.bacnet -am -DskipTests
 ```
 
 The resulting bundle is at
-`bundles/org.openhab.binding.bacnet/target/org.openhab.binding.bacnet-0.4.0.jar`.
+`bundles/org.openhab.binding.bacnet/target/org.openhab.binding.bacnet-0.5.0.jar`.
 
 ## Changelog
+
+### 0.5.0
+
+- **Readable channel labels.** When building a device's channels, the binding now
+  reads each object's `object-name` (property 77) and engineering `units` (117) and
+  labels the channel accordingly, e.g. `AU_Temp_H00 [°C]` — the same names YABE
+  shows. The channel id stays `<type>_<instance>` so links remain stable.
 
 ### 0.4.0
 

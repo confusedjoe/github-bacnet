@@ -139,8 +139,19 @@ public class BACnetDeviceHandler extends BaseThingHandler {
                     channelId);
             org.openhab.core.thing.type.ChannelTypeUID ctuid = new org.openhab.core.thing.type.ChannelTypeUID(
                     BACnetBindingConstants.BINDING_ID, channelTypeId);
+            // Human-readable label from the object's name + engineering unit (like YABE),
+            // e.g. "AU_Temp_H00 [°C]". Falls back to the channel id if unavailable.
+            String objName = svc.readObjectName(addr, type, inst, timeoutMs);
+            String label = (objName != null && !objName.isBlank()) ? objName : channelId;
+            if (BACnetEnums.ObjectType.isAnalog(type) || type == BACnetEnums.ObjectType.SCHEDULE) {
+                PropertyValue u = svc.readProperty(addr, type, inst, BACnetEnums.Property.UNITS, timeoutMs);
+                String unit = u != null ? BACnetEnums.Units.symbol((int) u.number) : "";
+                if (!unit.isEmpty()) {
+                    label = label + " [" + unit + "]";
+                }
+            }
             org.openhab.core.thing.Channel ch = org.openhab.core.thing.binding.builder.ChannelBuilder
-                    .create(cuid).withType(ctuid).build();
+                    .create(cuid).withType(ctuid).withLabel(label).build();
             builder.withChannel(ch);
 
             // Companion alarm trigger channel for this object.
