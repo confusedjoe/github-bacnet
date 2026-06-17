@@ -17,7 +17,9 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -95,6 +97,9 @@ public class BACnetIpClient {
     private final ConcurrentHashMap<Integer, BlockingQueue<byte[]>> pending = new ConcurrentHashMap<>();
     // I-Am frames waiting to be drained by a discovery scan (bounded; oldest dropped).
     private final BlockingQueue<IamFrame> iamQueue = new LinkedBlockingQueue<>(512);
+    // Every source IP we have received any BACnet frame from — lets discovery
+    // probe "silent" devices that broadcast (e.g. Who-Is) but never answer Who-Is.
+    private final Set<String> seenSources = ConcurrentHashMap.newKeySet();
 
     private volatile boolean dispatching = false;
     private @Nullable Thread dispatchThread;
@@ -107,6 +112,11 @@ public class BACnetIpClient {
     /** Access the confirmed-service helper (ReadProperty/WriteProperty/SubscribeCOV). */
     public @Nullable BACnetServices getServices() {
         return services;
+    }
+
+    /** Snapshot of every source IP seen on the socket so far (for discovery). */
+    public Set<String> getSeenSources() {
+        return new HashSet<>(seenSources);
     }
 
     public void addCovListener(Consumer<BACnetCovNotification.Notification> l) {
@@ -193,6 +203,10 @@ public class BACnetIpClient {
                 DatagramPacket p = new DatagramPacket(buf, buf.length);
                 s.receive(p);
                 InetAddress src = p.getAddress();
+                if (src == null) {
+                    continue; // no source address — nothing we can route or attribute
+                }
+                seenSources.add(src.getHostAddress());
                 byte[] apdu = unwrap(p.getData(), p.getLength());
                 if (apdu == null || apdu.length < 2) {
                     continue;

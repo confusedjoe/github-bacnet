@@ -24,9 +24,11 @@ trigger channels. No external BACnet library is used (clean-room, EPL-compatible
 > against a BACnet/IP simulator; please report your results with real hardware in
 > this thread.
 >
-> **v0.2.0** fixes a critical bug where an always-on COV dispatch thread shared the
-> UDP socket and silently ate every I-Am reply and service ACK — discovery and
-> read/write now work while the bridge is online. Also adds an indexed object-list
+> **v0.3.0** adds **universal discovery**: besides Who-Is/I-Am, a scan now also
+> sweeps the subnet with a unicast wildcard-instance ReadProperty and probes any IP
+> it has heard BACnet traffic from — so controllers that ignore Who-Is are still
+> found (verified against a real 223-object device). v0.2.0 fixed a critical
+> shared-socket bug that silently ate every I-Am/ACK, plus an indexed object-list
 > fallback (no segmentation needed) and Schedule present-value write.
 
 ## Supported Things
@@ -54,7 +56,7 @@ installation), start a scan from the console: `discovery start bacnet`.
 3. Schedule write is numeric (REAL) only.
 
 ## Download
-https://github.com/confusedjoe/github-bacnet/releases/download/v0.2.0/org.openhab.binding.bacnet-0.2.0.jar
+https://github.com/confusedjoe/github-bacnet/releases/download/v0.3.0/org.openhab.binding.bacnet-0.3.0.jar
 
 Source code: https://github.com/confusedjoe/github-bacnet
 

@@ -363,6 +363,31 @@ public class BACnetServices {
         return null;
     }
 
+    // ---------- unicast device discovery ----------
+
+    /**
+     * Read a device's object-identifier via the wildcard instance (4194303).
+     * Devices answer this over unicast even when they ignore broadcast Who-Is,
+     * so it lets discovery find "silent" devices by IP. Returns {type, instance}
+     * (type is always 8/device) or null if the IP does not host a BACnet device.
+     */
+    public int @Nullable [] readDeviceObjectId(InetAddress target, int timeoutMs) {
+        int id = nextInvokeId();
+        byte[] apdu = buildReadProperty(id, BACnetEnums.ObjectType.DEVICE, 0x3FFFFF,
+                BACnetEnums.Property.OBJECT_IDENTIFIER, -1);
+        byte[] reply = sendAndReceive(target, apdu, id, timeoutMs);
+        if (reply == null) {
+            return null;
+        }
+        return parseObjectIdValue(reply);
+    }
+
+    /** Convenience: read an object's object-name (property 77) as a string. */
+    public @Nullable String readObjectName(InetAddress target, int objectType, int instance, int timeoutMs) {
+        PropertyValue v = readProperty(target, objectType, instance, BACnetEnums.Property.OBJECT_NAME, timeoutMs);
+        return v == null ? null : v.text;
+    }
+
     // ---------- transport ----------
 
     private byte @Nullable [] sendAndReceive(InetAddress target, byte[] apdu, int expectedInvokeId, int timeoutMs) {

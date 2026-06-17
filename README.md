@@ -1,21 +1,21 @@
 # openHAB BACnet/IP Binding (community / experimental)
 
 A lightweight, dependency-free **BACnet/IP** binding for openHAB 4.3.x.
-It discovers BACnet devices via Who-Is / I-Am, reads and writes present values,
-receives live updates via COV subscriptions, and forwards intrinsic alarms as
-trigger channels.
+It discovers BACnet devices (even ones that ignore Who-Is), reads and writes
+present values, receives live updates via COV subscriptions, and forwards
+intrinsic alarms as trigger channels.
 
 > ⚠️ **Status: experimental / work in progress.**
 > This binding was written from scratch (clean-room, no `bacnet4j`, EPL-compatible).
-> Discovery, object-list read (bulk + indexed), ReadProperty and WriteProperty are
-> verified end-to-end against a BACnet/IP simulator; broad testing against real
-> hardware is still ongoing. Use it for evaluation and testing. Feedback and pull
-> requests are very welcome.
+> Discovery, object-list read (bulk + indexed) and Read/WriteProperty are verified
+> against a simulator **and** against a real controller with 223 objects that does
+> not answer Who-Is. Still evolving — feedback and pull requests very welcome.
 
 ## Features
 
 - BACnet/IP (Annex J) over UDP, no external BACnet library
-- Device discovery (Who-Is / I-Am) into the openHAB inbox
+- **Universal discovery**: Who-Is/I-Am **plus** a unicast subnet sweep and passive
+  detection, so devices that never answer Who-Is are still found
 - Read/write of present values: analog, binary and multi-state objects
 - Live updates via COV subscriptions (instead of pure polling)
 - Intrinsic alarms (event-state changes) exposed as trigger channels
@@ -30,14 +30,33 @@ trigger channels.
 
 ## Discovery
 
-Create the bridge first, then start a scan. The bridge broadcasts a Who-Is and
-adds every responding device to the inbox.
+Create the bridge first, then start a scan. The scan combines three mechanisms so
+it finds far more than plain Who-Is:
 
-Because this binding is installed manually (not yet from the official add-on
-store), the scan is most reliably triggered from the openHAB console:
+1. **Who-Is / I-Am** broadcast — the standard mechanism.
+2. **Passive** — any IP that has sent the bridge any BACnet frame (e.g. a
+   controller that broadcasts its own Who-Is) is probed.
+3. **Active subnet sweep** — every host in the bridge's `/24` subnet is probed
+   with a unicast `ReadProperty(device:4194303, object-identifier)` (the
+   wildcard-instance trick). Devices that ignore broadcast Who-Is still answer
+   this, so they are discovered with their real instance and IP.
+
+Trigger a scan from the UI (*Settings → Things → + → BACnet Binding → Scan*) or
+the console:
 
 ```
 discovery start bacnet
+```
+
+### Manual device (no discovery needed)
+
+Because discovered devices are addressed by IP, you can also define a device
+directly — useful for a fixed installation:
+
+```
+Bridge bacnet:bridge:local "BACnet/IP Network" [ broadcastAddress="192.168.1.255" ] {
+    Thing device altbau "Altbau" [ deviceInstance=1, address="192.168.1.88" ]
+}
 ```
 
 ## Configuration
@@ -59,7 +78,7 @@ Bridge bacnet:bridge:local "BACnet/IP Network" [ broadcastAddress="192.168.1.255
 ## Installation
 
 **Option A – manual JAR (quickest):**
-Download `org.openhab.binding.bacnet-0.2.0.jar` from the
+Download `org.openhab.binding.bacnet-0.3.0.jar` from the
 [Releases](../../releases) page and drop it into your openHAB `addons` folder.
 
 **Option B – openHAB Community Marketplace:**
@@ -80,9 +99,17 @@ mvn clean install -pl :org.openhab.binding.bacnet -am -DskipTests
 ```
 
 The resulting bundle is at
-`bundles/org.openhab.binding.bacnet/target/org.openhab.binding.bacnet-0.2.0.jar`.
+`bundles/org.openhab.binding.bacnet/target/org.openhab.binding.bacnet-0.3.0.jar`.
 
 ## Changelog
+
+### 0.3.0
+
+- **Universal discovery.** In addition to Who-Is/I-Am, a scan now (a) probes every
+  IP it has passively heard BACnet traffic from and (b) actively sweeps the bridge's
+  `/24` subnet with a unicast wildcard-instance `ReadProperty`. Devices that never
+  answer Who-Is (verified against a real 223-object controller) are now discovered
+  with their real instance and IP.
 
 ### 0.2.0
 

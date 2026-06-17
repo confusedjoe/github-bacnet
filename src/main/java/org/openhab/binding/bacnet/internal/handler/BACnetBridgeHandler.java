@@ -45,6 +45,7 @@ public class BACnetBridgeHandler extends BaseBridgeHandler {
 
     private @Nullable BACnetIpClient client;
     private int discoveryTimeout = 5000;
+    private @Nullable String broadcastAddress;
 
     public BACnetBridgeHandler(Bridge bridge) {
         super(bridge);
@@ -70,6 +71,7 @@ public class BACnetBridgeHandler extends BaseBridgeHandler {
             c.open();
             c.startDispatch();
             this.client = c;
+            this.broadcastAddress = broadcast;
             updateStatus(ThingStatus.ONLINE);
             logger.info("BACnet bridge online (broadcast {}, port {})", broadcast, port);
         } catch (IOException e) {
@@ -93,6 +95,10 @@ public class BACnetBridgeHandler extends BaseBridgeHandler {
 
     public @Nullable BACnetIpClient getClient() {
         return client;
+    }
+
+    public @Nullable String getBroadcastAddress() {
+        return broadcastAddress;
     }
 
     public int getDiscoveryTimeout() {
