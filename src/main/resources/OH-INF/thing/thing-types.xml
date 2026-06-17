@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<thing:thing-descriptions bindingId="bacnet"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:thing="https://openhab.org/schemas/thing-description/v1.0.0"
+    xsi:schemaLocation="https://openhab.org/schemas/thing-description/v1.0.0 https://openhab.org/schemas/thing-description-1.0.0.xsd">
+
+    <bridge-type id="bridge">
+        <label>BACnet/IP Network</label>
+        <description>Represents the local BACnet/IP network and runs device discovery.</description>
+
+        <config-description>
+            <parameter name="broadcastAddress" type="text" required="true">
+                <label>Broadcast Address</label>
+                <description>Subnet broadcast address, e.g. 192.168.134.255</description>
+            </parameter>
+            <parameter name="localPort" type="integer">
+                <label>Local Port</label>
+                <description>UDP port to bind (BACnet default is 47808).</description>
+                <default>47808</default>
+            </parameter>
+            <parameter name="discoveryTimeout" type="integer">
+                <label>Discovery Timeout (s)</label>
+                <description>How long to listen for I-Am replies per scan.</description>
+                <default>5</default>
+            </parameter>
+        </config-description>
+    </bridge-type>
+
+    <thing-type id="device">
+        <supported-bridge-type-refs>
+            <bridge-type-ref id="bridge"/>
+        </supported-bridge-type-refs>
+
+        <label>BACnet Device</label>
+        <description>A discovered BACnet device.</description>
+
+        <representation-property>deviceInstance</representation-property>
+
+        <config-description>
+            <parameter name="deviceInstance" type="integer" required="true">
+                <label>Device Instance</label>
+                <description>BACnet device object instance number.</description>
+            </parameter>
+            <parameter name="address" type="text">
+                <label>Address</label>
+                <description>IP address of the device.</description>
+            </parameter>
+        </config-description>
+    </thing-type>
+
+    <channel-type id="analogReadonly">
+        <item-type>Number</item-type>
+        <label>Analog Value</label>
+        <description>Read-only analog present value.</description>
+        <state readOnly="true"/>
+    </channel-type>
+
+    <channel-type id="analogValue">
+        <item-type>Number</item-type>
+        <label>Analog Value</label>
+        <description>Writable analog present value.</description>
+    </channel-type>
+
+    <channel-type id="contactReadonly">
+        <item-type>Switch</item-type>
+        <label>Binary Value</label>
+        <description>Read-only binary present value.</description>
+        <state readOnly="true"/>
+    </channel-type>
+
+    <channel-type id="switchValue">
+        <item-type>Switch</item-type>
+        <label>Binary Value</label>
+        <description>Writable binary present value.</description>
+    </channel-type>
+
+    <channel-type id="multiStateValue">
+        <item-type>Number</item-type>
+        <label>Multi-State Value</label>
+        <description>Multi-state present value.</description>
+    </channel-type>
+
+    <channel-type id="alarm">
+        <kind>trigger</kind>
+        <label>Alarm</label>
+        <description>Fires on BACnet event-state changes (off-normal, fault).</description>
+    </channel-type>
+
+</thing:thing-descriptions>
