@@ -176,9 +176,12 @@ public class BACnetDeviceHandler extends BaseThingHandler {
             return "multiStateValue";
         }
         if (objectType == BACnetEnums.ObjectType.SCHEDULE) {
-            return "analogReadonly";
+            // Schedule present-value is writable (override the active value).
+            return "analogValue";
         }
         if (objectType == BACnetEnums.ObjectType.CALENDAR) {
+            // Calendar present-value is read-only per ASHRAE 135 (derived from
+            // the date-list), so it stays a read-only contact channel.
             return "contactReadonly";
         }
         return null;
@@ -231,6 +234,11 @@ public class BACnetDeviceHandler extends BaseThingHandler {
         } else if (BACnetEnums.ObjectType.isMultiState(pc.objectType) && command instanceof DecimalType dt) {
             svc.writeEnumerated(addr, pc.objectType, pc.instance, BACnetEnums.Property.PRESENT_VALUE,
                     dt.longValue(), 8, timeoutMs);
+        } else if (pc.objectType == BACnetEnums.ObjectType.SCHEDULE && command instanceof DecimalType dt) {
+            // Schedule present-value is written without a priority (schedules
+            // have no priority array); numeric schedules only.
+            svc.writeReal(addr, pc.objectType, pc.instance, BACnetEnums.Property.PRESENT_VALUE,
+                    dt.floatValue(), 0, timeoutMs);
         }
     }
 
@@ -338,4 +346,7 @@ public class BACnetDeviceHandler extends BaseThingHandler {
                 case "schedule": return BACnetEnums.ObjectType.SCHEDULE;
                 case "calendar": return BACnetEnums.ObjectType.CALENDAR;
                 default: return -1;
-          
+            }
+        }
+    }
+}

@@ -13,9 +13,6 @@
 package org.openhab.binding.bacnet.internal.protocol;
 
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.List;
@@ -31,21 +28,21 @@ import org.slf4j.LoggerFactory;
  * Builds and parses confirmed BACnet/IP service requests.
  *
  * Supported services:
- *  - ReadProperty (choice 12)
+ *  - ReadProperty (choice 12), including by array index
  *  - WriteProperty (choice 15)
  *  - SubscribeCOV (choice 5)
- *  - ReadProperty on object-list (point discovery)
+ *  - ReadProperty on object-list (point discovery), with an indexed fallback
+ *    for devices that cannot return the whole list in one (unsegmented) APDU
  *
  * Service choices per ANSI/ASHRAE 135, BACnetConfirmedServiceChoice.
+ *
+ * All transport (send + await reply) is delegated to {@link BACnetIpClient} so
+ * that a single thread owns the socket; see that class for the rationale.
  *
  * @author Edin - Initial contribution
  */
 @NonNullByDefault
 public class BACnetServices {
-
-    private static final int BACNET_PORT = 0xBAC0;
-    private static final byte BVLC_TYPE = (byte) 0x81;
-    private static final byte BVLC_ORIGINAL_UNICAST_NPDU = 0x0A;
 
     // PDU types
     private static final int PDU_CONFIRMED_REQUEST = 0x00;
@@ -61,12 +58,15 @@ public class BACnetServices {
     public static final int SVC_CONF_COV_NOTIFICATION = 1;
     public static final int SVC_UNCONF_COV_NOTIFICATION = 2;
 
+    // Guard rail for the indexed object-list fallback.
+    private static final int MAX_OBJECT_LIST = 10000;
+
     private final Logger logger = LoggerFactory.getLogger(BACnetServices.class);
-    private final DatagramSocket socket;
+    private final BACnetIpClient client;
     private int invokeId = 0;
 
-    public BACnetServices(DatagramSocket socket) {
-        this.socket = socket;
+    public BACnetServices(BACnetIpClient client) {
+        this.client = client;
     }
 
     private synchronized int nextInvokeId() {
@@ -82,7 +82,21 @@ public class BACnetServices {
      */
     public @Nullable PropertyValue readProperty(InetAddress target, int objectType, int instance, int propertyId,
             int timeoutMs) {
+        return readPropertyInternal(target, objectType, instance, propertyId, -1, timeoutMs);
+    }
+
+    private @Nullable PropertyValue readPropertyInternal(InetAddress target, int objectType, int instance,
+            int propertyId, int arrayIndex, int timeoutMs) {
         int id = nextInvokeId();
+        byte[] apdu = buildReadProperty(id, objectType, instance, propertyId, arrayIndex);
+        byte[] reply = sendAndReceive(target, apdu, id, timeoutMs);
+        if (reply == null) {
+            return null;
+        }
+        return parseReadPropertyAck(reply);
+    }
+
+    private byte[] buildReadProperty(int id, int objectType, int instance, int propertyId, int arrayIndex) {
         ByteArrayOutputStream apdu = new ByteArrayOutputStream();
         apdu.write(PDU_CONFIRMED_REQUEST);
         apdu.write(0x05); // max segments/apdu accepted (1476)
@@ -90,11 +104,10 @@ public class BACnetServices {
         apdu.write(SVC_READ_PROPERTY);
         BACnetCodec.encodeContextObjectId(apdu, 0, objectType, instance);
         BACnetCodec.encodeContextUnsigned(apdu, 1, propertyId);
-        byte[] reply = sendAndReceive(target, apdu.toByteArray(), id, timeoutMs);
-        if (reply == null) {
-            return null;
+        if (arrayIndex >= 0) {
+            BACnetCodec.encodeContextUnsigned(apdu, 2, arrayIndex);
         }
-        return parseReadPropertyAck(reply);
+        return apdu.toByteArray();
     }
 
     private @Nullable PropertyValue parseReadPropertyAck(byte[] apdu) {
@@ -228,20 +241,30 @@ public class BACnetServices {
     // ---------- Object list (discovery of points within a device) ----------
 
     /**
-     * Read the device's object-list property and return all object identifiers.
-     * Uses ReadProperty on the device object's object-list (property 76).
+     * Read the device's object-list and return all object identifiers.
+     *
+     * Fast path: a single ReadProperty of the whole object-list (property 76).
+     * That fails on devices whose list does not fit in one APDU and which need
+     * segmentation (not implemented). In that case we fall back to reading the
+     * list element by element via the array index, which never needs
+     * segmentation.
      */
     public List<int[]> readObjectList(InetAddress target, int deviceInstance, int timeoutMs) {
+        List<int[]> bulk = readObjectListBulk(target, deviceInstance, timeoutMs);
+        if (!bulk.isEmpty()) {
+            return bulk;
+        }
+        logger.debug("Bulk object-list read empty/failed for device {} — falling back to indexed read",
+                deviceInstance);
+        return readObjectListIndexed(target, deviceInstance, timeoutMs);
+    }
+
+    private List<int[]> readObjectListBulk(InetAddress target, int deviceInstance, int timeoutMs) {
         List<int[]> result = new ArrayList<>();
         int id = nextInvokeId();
-        ByteArrayOutputStream apdu = new ByteArrayOutputStream();
-        apdu.write(PDU_CONFIRMED_REQUEST);
-        apdu.write(0x05);
-        apdu.write(id);
-        apdu.write(SVC_READ_PROPERTY);
-        BACnetCodec.encodeContextObjectId(apdu, 0, BACnetEnums.ObjectType.DEVICE, deviceInstance);
-        BACnetCodec.encodeContextUnsigned(apdu, 1, BACnetEnums.Property.OBJECT_LIST);
-        byte[] reply = sendAndReceive(target, apdu.toByteArray(), id, timeoutMs);
+        byte[] apdu = buildReadProperty(id, BACnetEnums.ObjectType.DEVICE, deviceInstance,
+                BACnetEnums.Property.OBJECT_LIST, -1);
+        byte[] reply = sendAndReceive(target, apdu, id, timeoutMs);
         if (reply == null) {
             return result;
         }
@@ -276,83 +299,73 @@ public class BACnetServices {
         return result;
     }
 
+    /**
+     * Read the object-list one element at a time using the array index.
+     * Index 0 yields the element count; indices 1..count each yield one object
+     * identifier. Each reply is tiny, so no segmentation is ever required.
+     */
+    private List<int[]> readObjectListIndexed(InetAddress target, int deviceInstance, int timeoutMs) {
+        List<int[]> result = new ArrayList<>();
+        PropertyValue countVal = readPropertyInternal(target, BACnetEnums.ObjectType.DEVICE, deviceInstance,
+                BACnetEnums.Property.OBJECT_LIST, 0, timeoutMs);
+        if (countVal == null) {
+            return result;
+        }
+        int count = (int) countVal.number;
+        if (count <= 0) {
+            return result;
+        }
+        if (count > MAX_OBJECT_LIST) {
+            logger.warn("Device {} reports {} objects; capping indexed read at {}", deviceInstance, count,
+                    MAX_OBJECT_LIST);
+            count = MAX_OBJECT_LIST;
+        }
+        for (int i = 1; i <= count; i++) {
+            int id = nextInvokeId();
+            byte[] apdu = buildReadProperty(id, BACnetEnums.ObjectType.DEVICE, deviceInstance,
+                    BACnetEnums.Property.OBJECT_LIST, i);
+            byte[] reply = sendAndReceive(target, apdu, id, timeoutMs);
+            if (reply == null) {
+                continue;
+            }
+            int[] oid = parseObjectIdValue(reply);
+            if (oid != null) {
+                result.add(oid);
+            }
+        }
+        return result;
+    }
+
+    /** Parse a ReadProperty ACK whose value is a single object identifier. */
+    private int @Nullable [] parseObjectIdValue(byte[] apdu) {
+        Reader r = new Reader(apdu, 0, apdu.length);
+        int pduType = r.data[r.pos++] & 0xFF;
+        if ((pduType & 0xF0) != PDU_COMPLEX_ACK) {
+            return null;
+        }
+        r.pos++; // invoke id
+        int service = r.data[r.pos++] & 0xFF;
+        if (service != SVC_READ_PROPERTY) {
+            return null;
+        }
+        while (r.hasMore()) {
+            Tag t = BACnetCodec.readTag(r);
+            if (t.context && t.number == 3 && t.opening) {
+                Tag vt = BACnetCodec.readTag(r);
+                if (!vt.context && vt.number == BACnetCodec.TAG_OBJECT_ID) {
+                    return BACnetCodec.readObjectId(r);
+                }
+                return null;
+            } else if (!t.opening && !t.closing) {
+                BACnetCodec.skip(r, t.length);
+            }
+        }
+        return null;
+    }
+
     // ---------- transport ----------
 
     private byte @Nullable [] sendAndReceive(InetAddress target, byte[] apdu, int expectedInvokeId, int timeoutMs) {
-        try {
-            byte[] frame = wrapUnicast(apdu);
-            DatagramPacket p = new DatagramPacket(frame, frame.length, target, BACNET_PORT);
-            socket.send(p);
-            long deadline = System.currentTimeMillis() + timeoutMs;
-            byte[] buf = new byte[1500];
-            while (System.currentTimeMillis() < deadline) {
-                int remaining = (int) (deadline - System.currentTimeMillis());
-                socket.setSoTimeout(Math.max(1, remaining));
-                DatagramPacket in = new DatagramPacket(buf, buf.length);
-                try {
-                    socket.receive(in);
-                } catch (java.net.SocketTimeoutException e) {
-                    return null;
-                }
-                byte[] inner = unwrap(in.getData(), in.getLength());
-                if (inner != null && inner.length >= 3) {
-                    int pduType = inner[0] & 0xFF;
-                    // simple/complex ack and error carry invoke id at offset 1
-                    int idOffset = ((pduType & 0xF0) == PDU_COMPLEX_ACK || (pduType & 0xF0) == PDU_SIMPLE_ACK
-                            || (pduType & 0xF0) == PDU_ERROR) ? 1 : -1;
-                    if (idOffset >= 0 && (inner[idOffset] & 0xFF) == expectedInvokeId) {
-                        return inner;
-                    }
-                }
-            }
-            return null;
-        } catch (IOException e) {
-            logger.debug("send/receive failed: {}", e.getMessage());
-            return null;
-        }
-    }
-
-    private byte[] wrapUnicast(byte[] apdu) {
-        byte[] npdu = new byte[] { 0x01, 0x04 }; // version, control=expecting reply
-        int len = 4 + npdu.length + apdu.length;
-        byte[] frame = new byte[len];
-        frame[0] = BVLC_TYPE;
-        frame[1] = BVLC_ORIGINAL_UNICAST_NPDU;
-        frame[2] = (byte) ((len >> 8) & 0xFF);
-        frame[3] = (byte) (len & 0xFF);
-        System.arraycopy(npdu, 0, frame, 4, npdu.length);
-        System.arraycopy(apdu, 0, frame, 4 + npdu.length, apdu.length);
-        return frame;
-    }
-
-    /** Strip BVLC + NPDU, return the APDU bytes. */
-    private byte @Nullable [] unwrap(byte[] data, int length) {
-        if (length < 6 || (data[0] & 0xFF) != 0x81) {
-            return null;
-        }
-        int idx = 4; // skip BVLC
-        idx++; // npdu version
-        int control = data[idx++] & 0xFF;
-        if ((control & 0x20) != 0) {
-            idx += 2;
-            int dlen = data[idx++] & 0xFF;
-            idx += dlen;
-        }
-        if ((control & 0x08) != 0) {
-            idx += 2;
-            int slen = data[idx++] & 0xFF;
-            idx += slen;
-        }
-        if ((control & 0x20) != 0) {
-            idx++; // hop count
-        }
-        int len = length - idx;
-        if (len <= 0) {
-            return null;
-        }
-        byte[] apdu = new byte[len];
-        System.arraycopy(data, idx, apdu, 0, len);
-        return apdu;
+        return client.sendConfirmedAndAwait(target, apdu, expectedInvokeId, timeoutMs);
     }
 }
-                                                  

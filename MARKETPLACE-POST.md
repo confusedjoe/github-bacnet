@@ -20,8 +20,14 @@ It discovers BACnet devices (Who-Is / I-Am), reads and writes present values,
 receives live updates via COV subscriptions, and forwards intrinsic alarms as
 trigger channels. No external BACnet library is used (clean-room, EPL-compatible).
 
-> ⚠️ **Experimental / work in progress.** Not yet tested against real BACnet
-> hardware. Please report your results in this thread.
+> ⚠️ **Experimental / work in progress.** Discovery and read/write are verified
+> against a BACnet/IP simulator; please report your results with real hardware in
+> this thread.
+>
+> **v0.2.0** fixes a critical bug where an always-on COV dispatch thread shared the
+> UDP socket and silently ate every I-Am reply and service ACK — discovery and
+> read/write now work while the bridge is online. Also adds an indexed object-list
+> fallback (no segmentation needed) and Schedule present-value write.
 
 ## Supported Things
 - `bacnet:bridge` – the local BACnet/IP network (owns the UDP socket, runs discovery)
@@ -43,14 +49,13 @@ does not appear in the UI binding picker (typical for community add-ons before
 installation), start a scan from the console: `discovery start bacnet`.
 
 ## Known limitations
-1. No segmentation – object-list discovery can fail on devices with very large object lists.
-2. COV listener and read/write share one UDP socket – responses may race under load.
-3. Schedule / Calendar are read-only.
+1. Partial segmentation: only the object-list is worked around (via indexed reads); other very large properties are not reassembled.
+2. Calendar present-value is read-only (per ASHRAE 135); writing would require editing the Date_List.
+3. Schedule write is numeric (REAL) only.
 
 ## Download
-<!-- Diese Zeile durch die echte Release-URL ersetzen: -->
-https://github.com/DEIN-BENUTZERNAME/openhab-bacnet-binding/releases/download/v0.1.0/org.openhab.binding.bacnet-0.1.0.jar
+https://github.com/confusedjoe/github-bacnet/releases/download/v0.2.0/org.openhab.binding.bacnet-0.2.0.jar
 
-Source code: https://github.com/DEIN-BENUTZERNAME/openhab-bacnet-binding
+Source code: https://github.com/confusedjoe/github-bacnet
 
 Feedback, bug reports and pull requests welcome!

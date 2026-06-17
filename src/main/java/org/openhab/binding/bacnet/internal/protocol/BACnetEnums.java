@@ -80,7 +80,7 @@ public final class BACnetEnums {
 
         public static boolean isWritable(int t) {
             return t == ANALOG_OUTPUT || t == ANALOG_VALUE || t == BINARY_OUTPUT || t == BINARY_VALUE
-                    || t == MULTI_STATE_OUTPUT || t == MULTI_STATE_VALUE;
+                    || t == MULTI_STATE_OUTPUT || t == MULTI_STATE_VALUE || t == SCHEDULE;
         }
     }
 

@@ -6,9 +6,11 @@ receives live updates via COV subscriptions, and forwards intrinsic alarms as
 trigger channels.
 
 > ⚠️ **Status: experimental / work in progress.**
-> This binding was written from scratch (clean-room, no `bacnet4j`, EPL-compatible)
-> and has **not yet been tested against real BACnet hardware**. Use it for
-> evaluation and testing. Feedback and pull requests are very welcome.
+> This binding was written from scratch (clean-room, no `bacnet4j`, EPL-compatible).
+> Discovery, object-list read (bulk + indexed), ReadProperty and WriteProperty are
+> verified end-to-end against a BACnet/IP simulator; broad testing against real
+> hardware is still ongoing. Use it for evaluation and testing. Feedback and pull
+> requests are very welcome.
 
 ## Features
 
@@ -17,7 +19,7 @@ trigger channels.
 - Read/write of present values: analog, binary and multi-state objects
 - Live updates via COV subscriptions (instead of pure polling)
 - Intrinsic alarms (event-state changes) exposed as trigger channels
-- Read access to Schedule and Calendar present values
+- Schedule present value read **and write** (override); Calendar present value read
 
 ## Supported Things
 
@@ -57,7 +59,7 @@ Bridge bacnet:bridge:local "BACnet/IP Network" [ broadcastAddress="192.168.1.255
 ## Installation
 
 **Option A – manual JAR (quickest):**
-Download `org.openhab.binding.bacnet-0.1.0.jar` from the
+Download `org.openhab.binding.bacnet-0.2.0.jar` from the
 [Releases](../../releases) page and drop it into your openHAB `addons` folder.
 
 **Option B – openHAB Community Marketplace:**
@@ -78,18 +80,37 @@ mvn clean install -pl :org.openhab.binding.bacnet -am -DskipTests
 ```
 
 The resulting bundle is at
-`bundles/org.openhab.binding.bacnet/target/org.openhab.binding.bacnet-0.1.0.jar`.
+`bundles/org.openhab.binding.bacnet/target/org.openhab.binding.bacnet-0.2.0.jar`.
+
+## Changelog
+
+### 0.2.0
+
+- **Fixed: discovery and read/write were broken whenever the bridge was online.**
+  A background COV/event dispatch thread shared the UDP socket with discovery and
+  with synchronous requests, and silently consumed every I-Am reply and service
+  ACK. The socket now has a **single reader** that routes each frame (COV/event →
+  listeners, I-Am → discovery, ACK → the waiting request by invoke id). This was
+  the root cause of empty scans against real hardware.
+- **Object-list segmentation fallback.** If the bulk object-list read fails or is
+  aborted (e.g. a large list that needs segmentation), the binding now reads the
+  list element by element via the array index, which never needs segmentation.
+- **Schedule present value is now writable** (numeric override).
+
+### 0.1.0
+
+- Initial experimental release.
 
 ## Known limitations
 
-These are documented and intentionally open in this first version:
-
-1. **No segmentation.** Automatic object-list discovery can fail on devices with
-   many data points (large object lists that exceed a single APDU).
-2. **Shared UDP socket.** The COV listener and synchronous read/write requests
-   share one UDP socket; under load, responses may race.
-3. **Schedule / Calendar are read-only.** Only present values are read; weekly
-   schedules and date lists cannot be written.
+1. **Partial segmentation support.** Large responses are only worked around for
+   the object-list (via indexed reads). Other very large properties that require
+   true APDU segmentation are still not reassembled.
+2. **Calendar present value is read-only** — this is per ASHRAE 135 (the value is
+   derived from the date-list). Writing a calendar would require editing its
+   `Date_List`, which is not yet implemented.
+3. **Schedule write is numeric only** (REAL present value); non-numeric schedule
+   datatypes are not encoded for writing.
 
 ## License
 
