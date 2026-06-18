@@ -77,6 +77,27 @@ Bridge bacnet:bridge:local "BACnet/IP Network" [ broadcastAddress="192.168.1.255
 Bridge bacnet:bridge:local "BACnet/IP Network" [ broadcastAddress="192.168.1.255", localPort=47808, discoveryTimeout=5 ]
 ```
 
+## Changing the IP address / network
+
+Devices are addressed by IP. To change a device's address — or the bridge's
+network — edit `conf/things/bacnet.things` and save; openHAB reloads it
+automatically.
+
+```
+Bridge bacnet:bridge:local "BACnet/IP Network" [ broadcastAddress="192.168.1.255", localPort=47808 ] {
+    Thing device altbau "Altbau" [ deviceInstance=1, address="192.168.1.88" ]
+}
+```
+
+- `address` — the device's IP; change this to repoint the device.
+- `broadcastAddress` — the network used for discovery.
+
+> ⚠️ **Changing the IP via the openHAB UI is not active yet.** When the binding is
+> installed as a manually-dropped jar it does not appear in the UI's add/edit-thing
+> flow, and file-defined things are read-only in the UI anyway. For now, change the
+> IP in the `.things` file. UI-based configuration (including the network drop-down)
+> is planned for when the binding is installed from the Marketplace/add-on store.
+
 ## Installation
 
 **Option A – manual JAR (quickest):**
@@ -168,6 +189,10 @@ the service layer and the build/test setup, see **[ARCHITECTURE.md](ARCHITECTURE
    `Date_List`, which is not yet implemented.
 3. **Schedule write is numeric only** (REAL present value); non-numeric schedule
    datatypes are not encoded for writing.
+4. **UI thing management is not active.** As a manually-dropped jar the binding
+   does not show in the UI's add/edit-thing flow, so creating a bridge, changing a
+   device IP or using the network drop-down must be done in the `.things` file for
+   now (see *Changing the IP address / network*).
 
 ## License
 
