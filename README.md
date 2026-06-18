@@ -103,6 +103,11 @@ mvn clean install -pl :org.openhab.binding.bacnet -am -DskipTests
 The resulting bundle is at
 `bundles/org.openhab.binding.bacnet/target/org.openhab.binding.bacnet-0.5.1.jar`.
 
+## Technical documentation
+
+For the protocol subset, the single-reader socket design, discovery internals,
+the service layer and the build/test setup, see **[ARCHITECTURE.md](ARCHITECTURE.md)**.
+
 ## Changelog
 
 ### 0.5.1
