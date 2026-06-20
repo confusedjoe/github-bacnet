@@ -196,6 +196,15 @@ works purely over unicast.
 > This is why a controller that never answers Who-Is is still discovered and
 > usable.
 
+**Background mode (0.6.0+):** the service extends `AbstractThingHandlerDiscoveryService`
+with background discovery enabled. `startBackgroundDiscovery()` schedules
+`startScan()` shortly after the bridge comes online and then every
+`discoveryInterval` minutes, and registers a *new-source listener* on the client.
+`BACnetIpClient.dispatchLoop` fires that listener the first time it sees any frame
+from a given IP (`seenSources.add(...)` returns `true`), so a newly-appearing
+device is probed immediately rather than waiting for the next interval. Bridge
+config: `backgroundDiscovery` (on/off) and `discoveryInterval` (minutes).
+
 ---
 
 ## 7. Thing model & handlers
@@ -306,6 +315,7 @@ subnet broadcast as the value with a label like
 
 | Version | Highlights |
 |---------|-----------|
+| 0.6.0 | Automatic background discovery (initial + periodic scan, immediate probe of new IPs) |
 | 0.5.1 | Fix: removed an unsupported `limitToOptions` attribute that broke thing-type registration |
 | 0.5.0 | Readable channel labels from `object-name` + units |
 | 0.4.0 | Network-interface picker in bridge config |

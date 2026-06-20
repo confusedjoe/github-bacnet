@@ -34,6 +34,8 @@ public class BACnetBindingConstants {
     public static final String CONFIG_BROADCAST = "broadcastAddress";
     public static final String CONFIG_LOCAL_PORT = "localPort";
     public static final String CONFIG_DISCOVERY_TIMEOUT = "discoveryTimeout";
+    public static final String CONFIG_BACKGROUND_DISCOVERY = "backgroundDiscovery";
+    public static final String CONFIG_DISCOVERY_INTERVAL = "discoveryInterval";
 
     // Device config / properties
     public static final String CONFIG_DEVICE_INSTANCE = "deviceInstance";

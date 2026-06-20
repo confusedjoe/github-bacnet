@@ -92,6 +92,8 @@ public class BACnetIpClient {
     // Notification listeners (COV / events) — the "live socket" fan-out.
     private final List<Consumer<BACnetCovNotification.Notification>> covListeners = new CopyOnWriteArrayList<>();
     private final List<Consumer<BACnetEventNotification.Event>> eventListeners = new CopyOnWriteArrayList<>();
+    // Fired once for each previously-unseen source IP (for event-driven discovery).
+    private final List<Consumer<String>> newSourceListeners = new CopyOnWriteArrayList<>();
 
     // Single-reader routing: replies waiting to be picked up by their callers.
     private final ConcurrentHashMap<Integer, BlockingQueue<byte[]>> pending = new ConcurrentHashMap<>();
@@ -133,6 +135,14 @@ public class BACnetIpClient {
 
     public void removeEventListener(Consumer<BACnetEventNotification.Event> l) {
         eventListeners.remove(l);
+    }
+
+    public void addNewSourceListener(Consumer<String> l) {
+        newSourceListeners.add(l);
+    }
+
+    public void removeNewSourceListener(Consumer<String> l) {
+        newSourceListeners.remove(l);
     }
 
     public void open() throws IOException {
@@ -206,7 +216,12 @@ public class BACnetIpClient {
                 if (src == null) {
                     continue; // no source address — nothing we can route or attribute
                 }
-                seenSources.add(src.getHostAddress());
+                if (seenSources.add(src.getHostAddress())) {
+                    // first time we hear from this IP — notify event-driven discovery
+                    for (Consumer<String> l : newSourceListeners) {
+                        l.accept(src.getHostAddress());
+                    }
+                }
                 byte[] apdu = unwrap(p.getData(), p.getLength());
                 if (apdu == null || apdu.length < 2) {
                     continue;

@@ -43,8 +43,14 @@ it finds far more than plain Who-Is:
    wildcard-instance trick). Devices that ignore broadcast Who-Is still answer
    this, so they are discovered with their real instance and IP.
 
-Trigger a scan from the UI (*Settings → Things → + → BACnet Binding → Scan*) or
-the console:
+By default discovery also runs **automatically in the background**: an initial
+scan starts shortly after the bridge comes online, repeats every
+`discoveryInterval` minutes, and any new IP that sends BACnet traffic is probed
+immediately. With openHAB's *auto-approve inbox* enabled, devices then appear as
+Things hands-free.
+
+You can also trigger a scan manually from the UI
+(*Settings → Things → + → BACnet Binding → Scan*) or the console:
 
 ```
 discovery start bacnet
@@ -70,6 +76,8 @@ Bridge bacnet:bridge:local "BACnet/IP Network" [ broadcastAddress="192.168.1.255
 | `broadcastAddress` | yes | – | Network to use — pick from the drop-down of local interfaces (YABE-style), or type a subnet broadcast such as `192.168.1.255` |
 | `localPort` | no | `47808` | UDP port to bind (BACnet default `0xBAC0`) |
 | `discoveryTimeout` | no | `5` | Seconds to listen for I-Am replies per scan |
+| `backgroundDiscovery` | no | `true` | Scan automatically in the background (initial scan after the bridge comes online, then on the interval; new IPs are probed immediately) |
+| `discoveryInterval` | no | `15` | Background re-scan interval in minutes |
 
 ### Example (file-based, `conf/things/bacnet.things`)
 
@@ -101,7 +109,7 @@ Bridge bacnet:bridge:local "BACnet/IP Network" [ broadcastAddress="192.168.1.255
 ## Installation
 
 **Option A – manual JAR (quickest):**
-Download `org.openhab.binding.bacnet-0.5.1.jar` from the
+Download `org.openhab.binding.bacnet-0.6.0.jar` from the
 [Releases](../../releases) page and drop it into your openHAB `addons` folder.
 
 **Option B – openHAB Community Marketplace:**
@@ -122,7 +130,7 @@ mvn clean install -pl :org.openhab.binding.bacnet -am -DskipTests
 ```
 
 The resulting bundle is at
-`bundles/org.openhab.binding.bacnet/target/org.openhab.binding.bacnet-0.5.1.jar`.
+`bundles/org.openhab.binding.bacnet/target/org.openhab.binding.bacnet-0.6.0.jar`.
 
 ## Technical documentation
 
@@ -130,6 +138,15 @@ For the protocol subset, the single-reader socket design, discovery internals,
 the service layer and the build/test setup, see **[ARCHITECTURE.md](ARCHITECTURE.md)**.
 
 ## Changelog
+
+### 0.6.0
+
+- **Automatic background discovery.** A scan now starts shortly after the bridge
+  comes online and repeats every `discoveryInterval` minutes (default 15) — no
+  manual *Scan* needed. Additionally, the moment a previously-unseen IP sends any
+  BACnet frame it is probed immediately. With openHAB's *auto-approve inbox* on,
+  devices are created as Things hands-free. New bridge options:
+  `backgroundDiscovery` and `discoveryInterval`.
 
 ### 0.5.1
 

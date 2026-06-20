@@ -46,6 +46,8 @@ public class BACnetBridgeHandler extends BaseBridgeHandler {
     private @Nullable BACnetIpClient client;
     private int discoveryTimeout = 5000;
     private @Nullable String broadcastAddress;
+    private boolean backgroundDiscovery = true;
+    private int discoveryInterval = 15; // minutes
 
     public BACnetBridgeHandler(Bridge bridge) {
         super(bridge);
@@ -59,6 +61,14 @@ public class BACnetBridgeHandler extends BaseBridgeHandler {
         int port = portObj instanceof Number ? ((Number) portObj).intValue() : 47808;
         if (timeoutObj instanceof Number) {
             discoveryTimeout = ((Number) timeoutObj).intValue() * 1000;
+        }
+        Object bgObj = getConfig().get(BACnetBindingConstants.CONFIG_BACKGROUND_DISCOVERY);
+        if (bgObj instanceof Boolean) {
+            backgroundDiscovery = (Boolean) bgObj;
+        }
+        Object intervalObj = getConfig().get(BACnetBindingConstants.CONFIG_DISCOVERY_INTERVAL);
+        if (intervalObj instanceof Number) {
+            discoveryInterval = ((Number) intervalObj).intValue();
         }
         if (broadcast == null || broadcast.isBlank()) {
             updateStatus(ThingStatus.OFFLINE, ThingStatusDetail.CONFIGURATION_ERROR,
@@ -103,6 +113,15 @@ public class BACnetBridgeHandler extends BaseBridgeHandler {
 
     public int getDiscoveryTimeout() {
         return discoveryTimeout;
+    }
+
+    public boolean isBackgroundDiscovery() {
+        return backgroundDiscovery;
+    }
+
+    /** Background re-scan interval in minutes. */
+    public int getDiscoveryInterval() {
+        return discoveryInterval;
     }
 
     @Override

@@ -24,6 +24,18 @@
                 <description>How long to listen for I-Am replies per scan.</description>
                 <default>5</default>
             </parameter>
+            <parameter name="backgroundDiscovery" type="boolean">
+                <label>Background Discovery</label>
+                <description>Automatically scan for devices in the background (initial scan shortly after the
+                    bridge comes online, then repeated on the interval below; new IPs are also probed immediately).</description>
+                <default>true</default>
+            </parameter>
+            <parameter name="discoveryInterval" type="integer" unit="min">
+                <label>Background Scan Interval (min)</label>
+                <description>How often the background scan repeats. A full sweep is one unicast probe per host in the
+                    /24 subnet, so very short intervals create noticeable traffic.</description>
+                <default>15</default>
+            </parameter>
         </config-description>
     </bridge-type>
 
