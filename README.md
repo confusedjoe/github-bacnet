@@ -109,7 +109,7 @@ Bridge bacnet:bridge:local "BACnet/IP Network" [ broadcastAddress="192.168.1.255
 ## Installation
 
 **Option A – manual JAR (quickest):**
-Download `org.openhab.binding.bacnet-0.6.0.jar` from the
+Download `org.openhab.binding.bacnet-0.6.1.jar` from the
 [Releases](../../releases) page and drop it into your openHAB `addons` folder.
 
 **Option B – openHAB Community Marketplace:**
@@ -130,7 +130,7 @@ mvn clean install -pl :org.openhab.binding.bacnet -am -DskipTests
 ```
 
 The resulting bundle is at
-`bundles/org.openhab.binding.bacnet/target/org.openhab.binding.bacnet-0.6.0.jar`.
+`bundles/org.openhab.binding.bacnet/target/org.openhab.binding.bacnet-0.6.1.jar`.
 
 ## Technical documentation
 
@@ -138,6 +138,13 @@ For the protocol subset, the single-reader socket design, discovery internals,
 the service layer and the build/test setup, see **[ARCHITECTURE.md](ARCHITECTURE.md)**.
 
 ## Changelog
+
+### 0.6.1
+
+- **Fix: background discovery never started.** `AbstractThingHandlerDiscoveryService`
+  does not auto-invoke `startBackgroundDiscovery()` on activation, so the automatic
+  scan added in 0.6.0 never ran. It is now started from the service's `initialize()`
+  hook (and stopped in `dispose()`).
 
 ### 0.6.0
 

@@ -76,6 +76,23 @@ public class BACnetDiscoveryService extends AbstractThingHandlerDiscoveryService
         super(BACnetBridgeHandler.class, Set.of(BACnetBindingConstants.THING_TYPE_DEVICE), 90, true);
     }
 
+    // ---------- lifecycle ----------
+    // AbstractThingHandlerDiscoveryService does NOT auto-invoke startBackgroundDiscovery()
+    // on activation, so we hook it into initialize() (called once the bridge handler is set)
+    // and tear it down in dispose().
+
+    @Override
+    public void initialize() {
+        super.initialize();
+        startBackgroundDiscovery();
+    }
+
+    @Override
+    public void dispose() {
+        stopBackgroundDiscovery();
+        super.dispose();
+    }
+
     // ---------- background discovery ----------
 
     @Override
