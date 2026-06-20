@@ -97,17 +97,25 @@ public class BACnetDiscoveryService extends AbstractThingHandlerDiscoveryService
 
     @Override
     protected void startBackgroundDiscovery() {
-        BACnetBridgeHandler handler = thingHandler;
-        if (!handler.isBackgroundDiscovery()) {
-            logger.debug("Background discovery disabled for this bridge");
-            return;
+        // NOTE: this is invoked by both activate() and initialize() of the base
+        // class. activate() may run before the thing handler is injected, so guard
+        // against a null handler — otherwise the NPE would abort service activation
+        // and silently kill all discovery.
+        try {
+            BACnetBridgeHandler handler = thingHandler;
+            if (!handler.isBackgroundDiscovery()) {
+                return;
+            }
+            stopBackgroundDiscovery();
+            int minutes = Math.max(1, handler.getDiscoveryInterval());
+            backgroundJob = scheduler.scheduleWithFixedDelay(this::backgroundScan, INITIAL_DELAY_S, minutes * 60L,
+                    TimeUnit.SECONDS);
+            logger.info("BACnet background discovery active (first run in {}s, then every {} min)", INITIAL_DELAY_S,
+                    minutes);
+        } catch (RuntimeException e) {
+            // handler not ready yet — initialize() will call us again once it is
+            logger.debug("startBackgroundDiscovery deferred: {}", e.toString());
         }
-        stopBackgroundDiscovery();
-        long intervalSeconds = Math.max(1, handler.getDiscoveryInterval()) * 60L;
-        backgroundJob = scheduler.scheduleWithFixedDelay(this::backgroundScan, INITIAL_DELAY_S, intervalSeconds,
-                TimeUnit.SECONDS);
-        logger.debug("BACnet background discovery scheduled (first run in {}s, then every {} min)", INITIAL_DELAY_S,
-                handler.getDiscoveryInterval());
     }
 
     @Override
@@ -118,9 +126,13 @@ public class BACnetDiscoveryService extends AbstractThingHandlerDiscoveryService
             backgroundJob = null;
         }
         if (listenerRegistered) {
-            BACnetIpClient client = thingHandler.getClient();
-            if (client != null) {
-                client.removeNewSourceListener(newSourceListener);
+            try {
+                BACnetIpClient client = thingHandler.getClient();
+                if (client != null) {
+                    client.removeNewSourceListener(newSourceListener);
+                }
+            } catch (RuntimeException ignored) {
+                // handler already gone
             }
             listenerRegistered = false;
         }
@@ -128,15 +140,22 @@ public class BACnetDiscoveryService extends AbstractThingHandlerDiscoveryService
 
     /** Periodic background task: ensure the new-source listener is wired, then scan. */
     private void backgroundScan() {
-        BACnetIpClient client = thingHandler.getClient();
-        if (client == null) {
-            return; // bridge not ready yet — try again next interval
+        // Must not throw: scheduleWithFixedDelay silently cancels all future runs
+        // if a task throws, so swallow + log instead.
+        try {
+            BACnetIpClient client = thingHandler.getClient();
+            if (client == null) {
+                logger.debug("Background scan skipped — bridge not ready yet");
+                return; // bridge not ready yet — try again next interval
+            }
+            if (!listenerRegistered) {
+                client.addNewSourceListener(newSourceListener);
+                listenerRegistered = true;
+            }
+            startScan();
+        } catch (RuntimeException e) {
+            logger.warn("BACnet background scan failed: {}", e.toString());
         }
-        if (!listenerRegistered) {
-            client.addNewSourceListener(newSourceListener);
-            listenerRegistered = true;
-        }
-        startScan();
     }
 
     /** A previously-unseen IP just sent us a frame — probe it right away. */
@@ -191,7 +210,8 @@ public class BACnetDiscoveryService extends AbstractThingHandlerDiscoveryService
         if (candidates.isEmpty()) {
             return;
         }
-        logger.debug("Probing {} candidate address(es) via unicast wildcard ReadProperty", candidates.size());
+        logger.info("BACnet scan: probing {} candidate address(es) via unicast wildcard ReadProperty",
+                candidates.size());
 
         ExecutorService pool = Executors.newFixedThreadPool(SWEEP_THREADS);
         try {
