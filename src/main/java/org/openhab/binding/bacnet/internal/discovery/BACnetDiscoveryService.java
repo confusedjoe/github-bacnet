@@ -32,6 +32,8 @@ import org.openhab.binding.bacnet.internal.protocol.BACnetServices;
 import org.openhab.core.config.discovery.AbstractThingHandlerDiscoveryService;
 import org.openhab.core.config.discovery.DiscoveryResultBuilder;
 import org.openhab.core.thing.ThingUID;
+import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.ServiceScope;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,6 +59,7 @@ import org.slf4j.LoggerFactory;
  *
  * @author Edin - Initial contribution
  */
+@Component(scope = ServiceScope.PROTOTYPE, service = BACnetDiscoveryService.class)
 @NonNullByDefault
 public class BACnetDiscoveryService extends AbstractThingHandlerDiscoveryService<BACnetBridgeHandler> {
 
