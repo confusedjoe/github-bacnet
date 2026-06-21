@@ -209,6 +209,31 @@ public final class BACnetEnums {
         }
     }
 
+    /** KBOB event/alarm categories derived from the Notification_Class number (Table 7). */
+    public static final class NotificationClass {
+        private NotificationClass() {
+        }
+
+        public static String category(int nc) {
+            if (nc >= 1 && nc <= 3) {
+                return "LifeSafety";
+            }
+            if (nc >= 4 && nc <= 32) {
+                return "PropertySafety";
+            }
+            if (nc >= 33 && nc <= 63) {
+                return "Supervisory";
+            }
+            if (nc >= 64 && nc <= 95) {
+                return "Trouble";
+            }
+            if (nc >= 96 && nc <= 127) {
+                return "Maintenance";
+            }
+            return "";
+        }
+    }
+
     /** Event states (BACnetEventState). */
     public static final class EventState {
         public static final int NORMAL = 0;

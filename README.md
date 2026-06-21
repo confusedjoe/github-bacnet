@@ -109,7 +109,7 @@ Bridge bacnet:bridge:local "BACnet/IP Network" [ broadcastAddress="192.168.1.255
 ## Installation
 
 **Option A – manual JAR (quickest):**
-Download `org.openhab.binding.bacnet-0.7.3.jar` from the
+Download `org.openhab.binding.bacnet-0.8.0.jar` from the
 [Releases](../../releases) page and drop it into your openHAB `addons` folder.
 
 **Option B – openHAB Community Marketplace:**
@@ -130,7 +130,7 @@ mvn clean install -pl :org.openhab.binding.bacnet -am -DskipTests
 ```
 
 The resulting bundle is at
-`bundles/org.openhab.binding.bacnet/target/org.openhab.binding.bacnet-0.7.3.jar`.
+`bundles/org.openhab.binding.bacnet/target/org.openhab.binding.bacnet-0.8.0.jar`.
 
 ## Technical documentation
 
@@ -138,6 +138,18 @@ For the protocol subset, the single-reader socket design, discovery internals,
 the service layer and the build/test setup, see **[ARCHITECTURE.md](ARCHITECTURE.md)**.
 
 ## Changelog
+
+### 0.8.0
+
+- **Device-name tag** instead of `Device_<n>`: items are grouped by the BACnet device
+  object name (e.g. `Altbau`).
+- **Alarm-state items.** For every alarm-capable object (one that has a
+  `Notification_Class`), the binding adds a read-only alarm-state channel + item
+  (current event-state Normal/Off-Normal/Fault), in addition to the trigger channel.
+- **KBOB alarm-category tag** from `Notification_Class` (Table 7):
+  `LifeSafety` (NC 1–3), `PropertySafety` (4–32), `Supervisory` (33–63),
+  `Trouble` (64–95), `Maintenance` (96–127). Applied to the value item and the
+  alarm item.
 
 ### 0.7.1 – 0.7.3
 

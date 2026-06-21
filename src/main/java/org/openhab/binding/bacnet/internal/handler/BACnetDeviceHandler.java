@@ -75,6 +75,7 @@ public class BACnetDeviceHandler extends BaseThingHandler {
     private @Nullable ScheduledFuture<?> pollJob;
     private int timeoutMs = 3000;
     private boolean autoCreateItems = true;
+    private String deviceTag = "";
 
     private final ManagedItemProvider itemProvider;
     private final ItemChannelLinkRegistry linkRegistry;
@@ -145,6 +146,10 @@ public class BACnetDeviceHandler extends BaseThingHandler {
             logger.debug("No objects returned for device {} (object-list read failed or empty)", deviceInstance);
             return;
         }
+        // Device/controller name used as a grouping tag (e.g. "Altbau").
+        String dn = svc.readObjectName(addr, BACnetEnums.ObjectType.DEVICE, deviceInstance, timeoutMs);
+        deviceTag = (dn != null && !dn.isBlank()) ? dn.trim().replaceAll("\\s+", "_") : "Device_" + deviceInstance;
+
         org.openhab.core.thing.binding.builder.ThingBuilder builder = editThing();
         for (int[] obj : objects) {
             int type = obj[0];
@@ -160,6 +165,11 @@ public class BACnetDeviceHandler extends BaseThingHandler {
             org.openhab.core.thing.ChannelUID cuid = new org.openhab.core.thing.ChannelUID(getThing().getUID(),
                     channelId);
             org.openhab.core.thing.Channel existing = getThing().getChannel(channelId);
+
+            // Notification class -> KBOB alarm category; also tells us the object alarms.
+            PropertyValue ncv = svc.readProperty(addr, type, inst, BACnetEnums.Property.NOTIFICATION_CLASS, timeoutMs);
+            int notificationClass = ncv != null ? (int) ncv.number : -1;
+            String category = notificationClass >= 0 ? BACnetEnums.NotificationClass.category(notificationClass) : "";
 
             String label;
             String unitSymbol;
@@ -197,7 +207,28 @@ public class BACnetDeviceHandler extends BaseThingHandler {
 
             // Auto-create the Item + link — also for channels that already existed.
             if (autoCreateItems) {
-                createItemAndLink(type, channelTypeId, cuid, channelId, label, unitSymbol);
+                createItemAndLink(type, channelTypeId, cuid, channelId, label, unitSymbol, category);
+            }
+
+            // Alarm-capable object (has a notification class): add a read-only alarm-state
+            // channel + item (with the KBOB category tag), in addition to the trigger.
+            if (notificationClass >= 0) {
+                String asId = "alarmstate_" + channelId;
+                org.openhab.core.thing.ChannelUID asUid = new org.openhab.core.thing.ChannelUID(getThing().getUID(),
+                        asId);
+                if (getThing().getChannel(asId) == null) {
+                    org.openhab.core.thing.type.ChannelTypeUID asType = new org.openhab.core.thing.type.ChannelTypeUID(
+                            BACnetBindingConstants.BINDING_ID, "alarmState");
+                    builder.withChannel(org.openhab.core.thing.binding.builder.ChannelBuilder.create(asUid)
+                            .withType(asType).withLabel(label + " (Alarm)").build());
+                }
+                if (autoCreateItems) {
+                    createAlarmStateItem(asUid, asId, category);
+                }
+                PropertyValue es = svc.readProperty(addr, type, inst, BACnetEnums.Property.EVENT_STATE, timeoutMs);
+                if (es != null) {
+                    updateState(asUid, new StringType(BACnetEnums.EventState.name((int) es.number)));
+                }
             }
 
             // (Re)subscribe to COV for live updates on this object.
@@ -249,7 +280,7 @@ public class BACnetDeviceHandler extends BaseThingHandler {
     // ---------- automatic item creation (semantic, BACnet-derived) ----------
 
     private void createItemAndLink(int objectType, String channelTypeId, ChannelUID channelUID, String channelId,
-            String label, String unitSymbol) {
+            String label, String unitSymbol, String category) {
         String itemName = itemNameFor(channelId);
         try {
             GenericItem item = newItem(channelTypeId, itemName);
@@ -257,7 +288,7 @@ public class BACnetDeviceHandler extends BaseThingHandler {
                 return;
             }
             item.setLabel(label);
-            item.addTags(tagsFor(objectType, unitSymbol));
+            item.addTags(tagsFor(objectType, unitSymbol, category));
             if (itemExists(itemName)) {
                 itemProvider.update(item); // refresh label + tags in place
             } else {
@@ -300,7 +331,7 @@ public class BACnetDeviceHandler extends BaseThingHandler {
      * Comprehensive, sortable tags derived from BACnet: object type, access,
      * openHAB semantic point class, physical quantity + unit, and the device.
      */
-    private Set<String> tagsFor(int objectType, String unitSymbol) {
+    private Set<String> tagsFor(int objectType, String unitSymbol, String category) {
         Set<String> tags = new HashSet<>();
         // 1. precise object type, e.g. "AnalogValue"
         tags.add(objectTypeTag(objectType));
@@ -324,9 +355,37 @@ public class BACnetDeviceHandler extends BaseThingHandler {
                 tags.add(quantity);
             }
         }
-        // 6. group by device/controller
-        tags.add("Device_" + deviceInstance);
+        // 6. group by device/controller (BACnet device name, e.g. "Altbau")
+        tags.add(deviceTag.isEmpty() ? "Device_" + deviceInstance : deviceTag);
+        // 7. KBOB alarm category (Notification_Class), if the object alarms
+        if (!category.isEmpty()) {
+            tags.add(category);
+        }
         return tags;
+    }
+
+    /** Alarm-state item for an alarm-capable object (read-only String, tagged). */
+    private void createAlarmStateItem(ChannelUID channelUID, String alarmChannelId, String category) {
+        String itemName = itemNameFor(alarmChannelId);
+        try {
+            StringItem item = new StringItem(itemName);
+            item.setLabel("Alarm " + alarmChannelId);
+            Set<String> tags = new HashSet<>();
+            tags.add("Alarm");
+            tags.add(deviceTag.isEmpty() ? "Device_" + deviceInstance : deviceTag);
+            if (!category.isEmpty()) {
+                tags.add(category);
+            }
+            item.addTags(tags);
+            if (itemExists(itemName)) {
+                itemProvider.update(item);
+            } else {
+                itemProvider.add(item);
+            }
+            linkRegistry.add(new ItemChannelLink(itemName, channelUID));
+        } catch (RuntimeException e) {
+            logger.debug("Auto alarm item for {}: {}", itemName, e.toString());
+        }
     }
 
     private String objectTypeTag(int t) {
@@ -491,8 +550,9 @@ public class BACnetDeviceHandler extends BaseThingHandler {
         if (e.initiatingDevice != deviceInstance) {
             return;
         }
-        String channelId = "alarm_" + BACnetEnums.ObjectType.name(e.objectType) + "_" + e.objectInstance;
-        triggerChannel(channelId, BACnetEnums.EventState.name(e.toState));
+        String base = BACnetEnums.ObjectType.name(e.objectType) + "_" + e.objectInstance;
+        triggerChannel("alarm_" + base, BACnetEnums.EventState.name(e.toState));
+        updateState("alarmstate_" + base, new StringType(BACnetEnums.EventState.name(e.toState)));
         logger.info("BACnet alarm: device {} object {}#{} state {} -> {}", e.initiatingDevice,
                 BACnetEnums.ObjectType.name(e.objectType), e.objectInstance,
                 BACnetEnums.EventState.name(e.fromState), BACnetEnums.EventState.name(e.toState));

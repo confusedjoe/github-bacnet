@@ -107,6 +107,13 @@
         <state readOnly="true"/>
     </channel-type>
 
+    <channel-type id="alarmState">
+        <item-type>String</item-type>
+        <label>Alarm State</label>
+        <description>Current BACnet event-state (Normal/Off-Normal/Fault) of an alarm-capable object.</description>
+        <state readOnly="true"/>
+    </channel-type>
+
     <channel-type id="alarm">
         <kind>trigger</kind>
         <label>Alarm</label>
