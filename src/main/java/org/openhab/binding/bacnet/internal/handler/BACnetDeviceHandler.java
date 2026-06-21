@@ -152,57 +152,59 @@ public class BACnetDeviceHandler extends BaseThingHandler {
                 continue;
             }
             String channelId = BACnetEnums.ObjectType.name(type) + "_" + inst;
-            if (getThing().getChannel(channelId) != null) {
-                continue;
-            }
             String channelTypeId = channelTypeFor(type);
             if (channelTypeId == null) {
                 continue;
             }
             org.openhab.core.thing.ChannelUID cuid = new org.openhab.core.thing.ChannelUID(getThing().getUID(),
                     channelId);
-            org.openhab.core.thing.type.ChannelTypeUID ctuid = new org.openhab.core.thing.type.ChannelTypeUID(
-                    BACnetBindingConstants.BINDING_ID, channelTypeId);
-            // Human-readable label from the object's name + engineering unit (like YABE),
-            // e.g. "AU_Temp_H00 [°C]". Falls back to the channel id if unavailable.
-            String objName = svc.readObjectName(addr, type, inst, timeoutMs);
-            String label = (objName != null && !objName.isBlank()) ? objName : channelId;
-            boolean isTemperature = false;
-            if (BACnetEnums.ObjectType.isAnalog(type) || type == BACnetEnums.ObjectType.SCHEDULE) {
-                PropertyValue u = svc.readProperty(addr, type, inst, BACnetEnums.Property.UNITS, timeoutMs);
-                int unitCode = u != null ? (int) u.number : -1;
-                String unit = BACnetEnums.Units.symbol(unitCode);
-                if (!unit.isEmpty()) {
-                    label = label + " [" + unit + "]";
+            org.openhab.core.thing.Channel existing = getThing().getChannel(channelId);
+
+            String label;
+            boolean isTemperature;
+            if (existing != null) {
+                // Channel already exists (persisted thing) — reuse its label, no re-read.
+                String existingLabel = existing.getLabel();
+                label = existingLabel != null ? existingLabel : channelId;
+                isTemperature = label.contains("°C") || label.contains("°F") || label.contains("[K]");
+            } else {
+                // New channel — read object name + unit, build value + alarm channels.
+                org.openhab.core.thing.type.ChannelTypeUID ctuid = new org.openhab.core.thing.type.ChannelTypeUID(
+                        BACnetBindingConstants.BINDING_ID, channelTypeId);
+                String objName = svc.readObjectName(addr, type, inst, timeoutMs);
+                label = (objName != null && !objName.isBlank()) ? objName : channelId;
+                isTemperature = false;
+                if (BACnetEnums.ObjectType.isAnalog(type) || type == BACnetEnums.ObjectType.SCHEDULE) {
+                    PropertyValue u = svc.readProperty(addr, type, inst, BACnetEnums.Property.UNITS, timeoutMs);
+                    int unitCode = u != null ? (int) u.number : -1;
+                    String unit = BACnetEnums.Units.symbol(unitCode);
+                    if (!unit.isEmpty()) {
+                        label = label + " [" + unit + "]";
+                    }
+                    isTemperature = unitCode == BACnetEnums.Units.DEGREES_CELSIUS
+                            || unitCode == BACnetEnums.Units.DEGREES_FAHRENHEIT
+                            || unitCode == BACnetEnums.Units.DEGREES_KELVIN;
                 }
-                isTemperature = unitCode == BACnetEnums.Units.DEGREES_CELSIUS
-                        || unitCode == BACnetEnums.Units.DEGREES_FAHRENHEIT
-                        || unitCode == BACnetEnums.Units.DEGREES_KELVIN;
+                builder.withChannel(org.openhab.core.thing.binding.builder.ChannelBuilder.create(cuid).withType(ctuid)
+                        .withLabel(label).build());
+                String alarmId = "alarm_" + channelId;
+                if (getThing().getChannel(alarmId) == null) {
+                    org.openhab.core.thing.ChannelUID acuid = new org.openhab.core.thing.ChannelUID(
+                            getThing().getUID(), alarmId);
+                    org.openhab.core.thing.type.ChannelTypeUID actuid = new org.openhab.core.thing.type.ChannelTypeUID(
+                            BACnetBindingConstants.BINDING_ID, "alarm");
+                    builder.withChannel(org.openhab.core.thing.binding.builder.ChannelBuilder.create(acuid)
+                            .withKind(org.openhab.core.thing.type.ChannelKind.TRIGGER).withType(actuid).build());
+                }
             }
-            org.openhab.core.thing.Channel ch = org.openhab.core.thing.binding.builder.ChannelBuilder
-                    .create(cuid).withType(ctuid).withLabel(label).build();
-            builder.withChannel(ch);
+
+            // Auto-create the Item + link — also for channels that already existed.
             if (autoCreateItems) {
                 createItemAndLink(type, channelTypeId, cuid, channelId, label, isTemperature);
             }
 
-            // Companion alarm trigger channel for this object.
-            String alarmId = "alarm_" + channelId;
-            if (getThing().getChannel(alarmId) == null) {
-                org.openhab.core.thing.ChannelUID acuid = new org.openhab.core.thing.ChannelUID(
-                        getThing().getUID(), alarmId);
-                org.openhab.core.thing.type.ChannelTypeUID actuid = new org.openhab.core.thing.type.ChannelTypeUID(
-                        BACnetBindingConstants.BINDING_ID, "alarm");
-                org.openhab.core.thing.Channel alarmCh = org.openhab.core.thing.binding.builder.ChannelBuilder
-                        .create(acuid).withKind(org.openhab.core.thing.type.ChannelKind.TRIGGER).withType(actuid)
-                        .build();
-                builder.withChannel(alarmCh);
-            }
-            // Subscribe to COV for live updates on this object.
-            Bridge bridge = getBridge();
-            if (bridge != null && bridge.getHandler() instanceof BACnetBridgeHandler) {
-                svc.subscribeCov(addr, deviceInstance, type, inst, false, 0, timeoutMs);
-            }
+            // (Re)subscribe to COV for live updates on this object.
+            svc.subscribeCov(addr, deviceInstance, type, inst, false, 0, timeoutMs);
         }
         updateThing(builder.build());
         pollAll();
