@@ -23,6 +23,8 @@ import org.openhab.binding.bacnet.internal.discovery.BACnetDiscoveryService;
 import org.openhab.binding.bacnet.internal.handler.BACnetBridgeHandler;
 import org.openhab.binding.bacnet.internal.handler.BACnetDeviceHandler;
 import org.openhab.core.config.discovery.DiscoveryService;
+import org.openhab.core.items.ItemRegistry;
+import org.openhab.core.items.ManagedItemProvider;
 import org.openhab.core.thing.Bridge;
 import org.openhab.core.thing.Thing;
 import org.openhab.core.thing.ThingTypeUID;
@@ -30,8 +32,10 @@ import org.openhab.core.thing.ThingUID;
 import org.openhab.core.thing.binding.BaseThingHandlerFactory;
 import org.openhab.core.thing.binding.ThingHandler;
 import org.openhab.core.thing.binding.ThingHandlerFactory;
+import org.openhab.core.thing.link.ItemChannelLinkRegistry;
 import org.osgi.framework.ServiceRegistration;
 import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.Reference;
 
 /**
  * The {@link BACnetHandlerFactory} creates the bridge and device handlers and
@@ -50,6 +54,10 @@ public class BACnetHandlerFactory extends BaseThingHandlerFactory {
     private final Map<ThingUID, BACnetDiscoveryService> discoveryServices = new ConcurrentHashMap<>();
     private final Map<ThingUID, ServiceRegistration<?>> discoveryRegs = new ConcurrentHashMap<>();
 
+    private @Reference @NonNullByDefault({}) ManagedItemProvider itemProvider;
+    private @Reference @NonNullByDefault({}) ItemChannelLinkRegistry linkRegistry;
+    private @Reference @NonNullByDefault({}) ItemRegistry itemRegistry;
+
     @Override
     public boolean supportsThingType(ThingTypeUID thingTypeUID) {
         return SUPPORTED.contains(thingTypeUID);
@@ -63,7 +71,7 @@ public class BACnetHandlerFactory extends BaseThingHandlerFactory {
             registerDiscoveryService(handler);
             return handler;
         } else if (BACnetBindingConstants.THING_TYPE_DEVICE.equals(typeUID)) {
-            return new BACnetDeviceHandler(thing);
+            return new BACnetDeviceHandler(thing, itemProvider, linkRegistry, itemRegistry);
         }
         return null;
     }

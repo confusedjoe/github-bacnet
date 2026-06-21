@@ -40,4 +40,5 @@ public class BACnetBindingConstants {
     // Device config / properties
     public static final String CONFIG_DEVICE_INSTANCE = "deviceInstance";
     public static final String PROPERTY_ADDRESS = "address";
+    public static final String CONFIG_AUTO_CREATE_ITEMS = "autoCreateItems";
 }

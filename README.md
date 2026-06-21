@@ -109,7 +109,7 @@ Bridge bacnet:bridge:local "BACnet/IP Network" [ broadcastAddress="192.168.1.255
 ## Installation
 
 **Option A – manual JAR (quickest):**
-Download `org.openhab.binding.bacnet-0.6.1.jar` from the
+Download `org.openhab.binding.bacnet-0.7.0.jar` from the
 [Releases](../../releases) page and drop it into your openHAB `addons` folder.
 
 **Option B – openHAB Community Marketplace:**
@@ -130,7 +130,7 @@ mvn clean install -pl :org.openhab.binding.bacnet -am -DskipTests
 ```
 
 The resulting bundle is at
-`bundles/org.openhab.binding.bacnet/target/org.openhab.binding.bacnet-0.6.1.jar`.
+`bundles/org.openhab.binding.bacnet/target/org.openhab.binding.bacnet-0.7.0.jar`.
 
 ## Technical documentation
 
@@ -138,6 +138,21 @@ For the protocol subset, the single-reader socket design, discovery internals,
 the service layer and the build/test setup, see **[ARCHITECTURE.md](ARCHITECTURE.md)**.
 
 ## Changelog
+
+### 0.7.0
+
+- **Automatic Items.** With `autoCreateItems` (default on), each device object gets
+  an Item created and linked automatically, with **semantic tags derived from the
+  BACnet object type**: analog input → `Measurement` (+`Temperature` for °C/°F/K),
+  writable analog/schedule → `Setpoint`, binary output/value → `Switch`, binary
+  input → `Status`, multi-state → `Status`. Item name `bacnet_<instance>_<channel>`,
+  label = object name + unit. Items/links are removed again when the Thing is deleted.
+
+### 0.6.2 – 0.6.4
+
+- Background-discovery reliability: the discovery service is now registered from the
+  handler factory so its lifecycle is deterministic (the prototype-component route
+  never got activated on the test system).
 
 ### 0.6.1
 

@@ -13,6 +13,8 @@
 package org.openhab.binding.bacnet.internal.handler;
 
 import java.net.InetAddress;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -26,6 +28,13 @@ import org.openhab.binding.bacnet.internal.protocol.BACnetEventNotification;
 import org.openhab.binding.bacnet.internal.protocol.BACnetIpClient;
 import org.openhab.binding.bacnet.internal.protocol.BACnetServices;
 import org.openhab.binding.bacnet.internal.protocol.PropertyValue;
+import org.openhab.core.items.GenericItem;
+import org.openhab.core.items.ItemNotFoundException;
+import org.openhab.core.items.ItemRegistry;
+import org.openhab.core.items.ManagedItemProvider;
+import org.openhab.core.library.items.ContactItem;
+import org.openhab.core.library.items.NumberItem;
+import org.openhab.core.library.items.SwitchItem;
 import org.openhab.core.library.types.DecimalType;
 import org.openhab.core.library.types.OnOffType;
 import org.openhab.core.library.types.StringType;
@@ -35,6 +44,8 @@ import org.openhab.core.thing.Thing;
 import org.openhab.core.thing.ThingStatus;
 import org.openhab.core.thing.ThingStatusDetail;
 import org.openhab.core.thing.binding.BaseThingHandler;
+import org.openhab.core.thing.link.ItemChannelLink;
+import org.openhab.core.thing.link.ItemChannelLinkRegistry;
 import org.openhab.core.types.Command;
 import org.openhab.core.types.RefreshType;
 import org.openhab.core.types.State;
@@ -62,18 +73,31 @@ public class BACnetDeviceHandler extends BaseThingHandler {
     private @Nullable BACnetServices services;
     private @Nullable ScheduledFuture<?> pollJob;
     private int timeoutMs = 3000;
+    private boolean autoCreateItems = true;
+
+    private final ManagedItemProvider itemProvider;
+    private final ItemChannelLinkRegistry linkRegistry;
+    private final ItemRegistry itemRegistry;
 
     private final Consumer<BACnetCovNotification.Notification> covListener = this::onCov;
     private final Consumer<BACnetEventNotification.Event> eventListener = this::onEvent;
 
-    public BACnetDeviceHandler(Thing thing) {
+    public BACnetDeviceHandler(Thing thing, ManagedItemProvider itemProvider, ItemChannelLinkRegistry linkRegistry,
+            ItemRegistry itemRegistry) {
         super(thing);
+        this.itemProvider = itemProvider;
+        this.linkRegistry = linkRegistry;
+        this.itemRegistry = itemRegistry;
     }
 
     @Override
     public void initialize() {
         Object inst = getConfig().get(BACnetBindingConstants.CONFIG_DEVICE_INSTANCE);
         String addr = (String) getConfig().get(BACnetBindingConstants.PROPERTY_ADDRESS);
+        Object autoObj = getConfig().get(BACnetBindingConstants.CONFIG_AUTO_CREATE_ITEMS);
+        if (autoObj instanceof Boolean) {
+            autoCreateItems = (Boolean) autoObj;
+        }
         deviceInstance = inst instanceof Number ? ((Number) inst).intValue() : -1;
         if (deviceInstance < 0 || addr == null || addr.isBlank()) {
             updateStatus(ThingStatus.OFFLINE, ThingStatusDetail.CONFIGURATION_ERROR,
@@ -143,16 +167,24 @@ public class BACnetDeviceHandler extends BaseThingHandler {
             // e.g. "AU_Temp_H00 [°C]". Falls back to the channel id if unavailable.
             String objName = svc.readObjectName(addr, type, inst, timeoutMs);
             String label = (objName != null && !objName.isBlank()) ? objName : channelId;
+            boolean isTemperature = false;
             if (BACnetEnums.ObjectType.isAnalog(type) || type == BACnetEnums.ObjectType.SCHEDULE) {
                 PropertyValue u = svc.readProperty(addr, type, inst, BACnetEnums.Property.UNITS, timeoutMs);
-                String unit = u != null ? BACnetEnums.Units.symbol((int) u.number) : "";
+                int unitCode = u != null ? (int) u.number : -1;
+                String unit = BACnetEnums.Units.symbol(unitCode);
                 if (!unit.isEmpty()) {
                     label = label + " [" + unit + "]";
                 }
+                isTemperature = unitCode == BACnetEnums.Units.DEGREES_CELSIUS
+                        || unitCode == BACnetEnums.Units.DEGREES_FAHRENHEIT
+                        || unitCode == BACnetEnums.Units.DEGREES_KELVIN;
             }
             org.openhab.core.thing.Channel ch = org.openhab.core.thing.binding.builder.ChannelBuilder
                     .create(cuid).withType(ctuid).withLabel(label).build();
             builder.withChannel(ch);
+            if (autoCreateItems) {
+                createItemAndLink(type, channelTypeId, cuid, channelId, label, isTemperature);
+            }
 
             // Companion alarm trigger channel for this object.
             String alarmId = "alarm_" + channelId;
@@ -196,6 +228,95 @@ public class BACnetDeviceHandler extends BaseThingHandler {
             return "contactReadonly";
         }
         return null;
+    }
+
+    // ---------- automatic item creation (semantic, BACnet-derived) ----------
+
+    private void createItemAndLink(int objectType, String channelTypeId, ChannelUID channelUID, String channelId,
+            String label, boolean isTemperature) {
+        String itemName = itemNameFor(channelId);
+        try {
+            if (!itemExists(itemName)) {
+                GenericItem item = newItem(channelTypeId, itemName);
+                if (item == null) {
+                    return;
+                }
+                item.setLabel(label);
+                item.addTags(tagsFor(objectType, isTemperature));
+                itemProvider.add(item);
+            }
+            // add() throws if the link already exists — harmless, keeps it idempotent
+            linkRegistry.add(new ItemChannelLink(itemName, channelUID));
+        } catch (RuntimeException e) {
+            logger.debug("Auto item/link for {}: {}", itemName, e.toString());
+        }
+    }
+
+    private boolean itemExists(String name) {
+        try {
+            itemRegistry.getItem(name);
+            return true;
+        } catch (ItemNotFoundException e) {
+            return false;
+        }
+    }
+
+    private @Nullable GenericItem newItem(String channelTypeId, String name) {
+        switch (channelTypeId) {
+            case "analogReadonly":
+            case "analogValue":
+            case "multiStateValue":
+                return new NumberItem(name);
+            case "switchValue":
+                return new SwitchItem(name);
+            case "contactReadonly":
+                return new ContactItem(name);
+            default:
+                return null;
+        }
+    }
+
+    /** Semantic tags derived from the BACnet object type (and unit for temperature). */
+    private Set<String> tagsFor(int objectType, boolean isTemperature) {
+        Set<String> tags = new HashSet<>();
+        if (BACnetEnums.ObjectType.isAnalog(objectType)) {
+            tags.add(BACnetEnums.ObjectType.isWritable(objectType) ? "Setpoint" : "Measurement");
+            if (isTemperature) {
+                tags.add("Temperature");
+            }
+        } else if (BACnetEnums.ObjectType.isBinary(objectType)) {
+            tags.add(BACnetEnums.ObjectType.isWritable(objectType) ? "Switch" : "Status");
+        } else if (objectType == BACnetEnums.ObjectType.SCHEDULE) {
+            tags.add("Setpoint");
+        } else {
+            tags.add("Status"); // multi-state, calendar, ...
+        }
+        return tags;
+    }
+
+    private String itemNameFor(String channelId) {
+        return "bacnet_" + deviceInstance + "_" + channelId;
+    }
+
+    @Override
+    public void handleRemoval() {
+        // Remove the items + links we auto-created, so deleting the Thing cleans up.
+        try {
+            linkRegistry.removeLinksForThing(getThing().getUID());
+        } catch (RuntimeException e) {
+            logger.debug("removeLinksForThing failed: {}", e.toString());
+        }
+        for (org.openhab.core.thing.Channel ch : getThing().getChannels()) {
+            if (ch.getKind() == org.openhab.core.thing.type.ChannelKind.TRIGGER) {
+                continue;
+            }
+            try {
+                itemProvider.remove(itemNameFor(ch.getUID().getId()));
+            } catch (RuntimeException ignored) {
+                // not created by us / already gone
+            }
+        }
+        updateStatus(ThingStatus.REMOVED);
     }
 
     @Override

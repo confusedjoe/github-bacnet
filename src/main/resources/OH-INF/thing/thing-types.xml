@@ -58,6 +58,13 @@
                 <label>Address</label>
                 <description>IP address of the device.</description>
             </parameter>
+            <parameter name="autoCreateItems" type="boolean">
+                <label>Auto-create Items</label>
+                <description>Automatically create an Item for every object/channel and link it, with semantic tags
+                    derived from the BACnet object type (Measurement/Setpoint/Switch/Status, plus Temperature for
+                    °C objects). Items are removed again when the Thing is deleted.</description>
+                <default>true</default>
+            </parameter>
         </config-description>
     </thing-type>
 

@@ -315,7 +315,9 @@ subnet broadcast as the value with a label like
 
 | Version | Highlights |
 |---------|-----------|
-| 0.6.1 | Fix: background discovery is now actually started (from `initialize()`) |
+| 0.7.0 | Automatic Item creation + linking with BACnet-derived semantic tags |
+| 0.6.2–0.6.4 | Background discovery registered from the handler factory (deterministic lifecycle) |
+| 0.6.1 | Fix attempt: start background discovery from `initialize()` |
 | 0.6.0 | Automatic background discovery (initial + periodic scan, immediate probe of new IPs) |
 | 0.5.1 | Fix: removed an unsupported `limitToOptions` attribute that broke thing-type registration |
 | 0.5.0 | Readable channel labels from `object-name` + units |
