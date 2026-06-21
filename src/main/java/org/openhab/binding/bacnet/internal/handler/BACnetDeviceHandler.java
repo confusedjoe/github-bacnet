@@ -34,6 +34,7 @@ import org.openhab.core.items.ItemRegistry;
 import org.openhab.core.items.ManagedItemProvider;
 import org.openhab.core.library.items.ContactItem;
 import org.openhab.core.library.items.NumberItem;
+import org.openhab.core.library.items.StringItem;
 import org.openhab.core.library.items.SwitchItem;
 import org.openhab.core.library.types.DecimalType;
 import org.openhab.core.library.types.OnOffType;
@@ -225,7 +226,24 @@ public class BACnetDeviceHandler extends BaseThingHandler {
             // the date-list), so it stays a read-only contact channel.
             return "contactReadonly";
         }
-        return null;
+        switch (objectType) {
+            case BACnetEnums.ObjectType.LOOP:
+            case BACnetEnums.ObjectType.AVERAGING:
+            case BACnetEnums.ObjectType.ACCUMULATOR:
+            case BACnetEnums.ObjectType.PULSE_CONVERTER:
+                return "analogReadonly"; // numeric, read-only (counters/loops)
+            case BACnetEnums.ObjectType.LARGE_ANALOG_VALUE:
+            case BACnetEnums.ObjectType.INTEGER_VALUE:
+            case BACnetEnums.ObjectType.POSITIVE_INTEGER_VALUE:
+            case BACnetEnums.ObjectType.LIGHTING_OUTPUT:
+                return "analogValue"; // numeric, writable
+            case BACnetEnums.ObjectType.BINARY_LIGHTING_OUTPUT:
+                return "switchValue";
+            case BACnetEnums.ObjectType.CHARACTERSTRING_VALUE:
+                return "stringValue";
+            default:
+                return null;
+        }
     }
 
     // ---------- automatic item creation (semantic, BACnet-derived) ----------
@@ -271,6 +289,8 @@ public class BACnetDeviceHandler extends BaseThingHandler {
                 return new SwitchItem(name);
             case "contactReadonly":
                 return new ContactItem(name);
+            case "stringValue":
+                return new StringItem(name);
             default:
                 return null;
         }
@@ -322,6 +342,16 @@ public class BACnetDeviceHandler extends BaseThingHandler {
             case BACnetEnums.ObjectType.MULTI_STATE_VALUE: return "MultiStateValue";
             case BACnetEnums.ObjectType.SCHEDULE: return "Schedule";
             case BACnetEnums.ObjectType.CALENDAR: return "Calendar";
+            case BACnetEnums.ObjectType.LOOP: return "Loop";
+            case BACnetEnums.ObjectType.AVERAGING: return "Averaging";
+            case BACnetEnums.ObjectType.ACCUMULATOR: return "Accumulator";
+            case BACnetEnums.ObjectType.PULSE_CONVERTER: return "PulseConverter";
+            case BACnetEnums.ObjectType.CHARACTERSTRING_VALUE: return "CharacterStringValue";
+            case BACnetEnums.ObjectType.INTEGER_VALUE: return "IntegerValue";
+            case BACnetEnums.ObjectType.LARGE_ANALOG_VALUE: return "LargeAnalogValue";
+            case BACnetEnums.ObjectType.POSITIVE_INTEGER_VALUE: return "PositiveIntegerValue";
+            case BACnetEnums.ObjectType.LIGHTING_OUTPUT: return "LightingOutput";
+            case BACnetEnums.ObjectType.BINARY_LIGHTING_OUTPUT: return "BinaryLightingOutput";
             default: return "BACnetObject";
         }
     }
@@ -410,6 +440,18 @@ public class BACnetDeviceHandler extends BaseThingHandler {
             // have no priority array); numeric schedules only.
             svc.writeReal(addr, pc.objectType, pc.instance, BACnetEnums.Property.PRESENT_VALUE,
                     dt.floatValue(), 0, timeoutMs);
+        } else if (command instanceof DecimalType dt
+                && (pc.objectType == BACnetEnums.ObjectType.LARGE_ANALOG_VALUE
+                        || pc.objectType == BACnetEnums.ObjectType.INTEGER_VALUE
+                        || pc.objectType == BACnetEnums.ObjectType.POSITIVE_INTEGER_VALUE
+                        || pc.objectType == BACnetEnums.ObjectType.LIGHTING_OUTPUT)) {
+            int priority = pc.objectType == BACnetEnums.ObjectType.LIGHTING_OUTPUT ? 8 : 0;
+            svc.writeReal(addr, pc.objectType, pc.instance, BACnetEnums.Property.PRESENT_VALUE,
+                    dt.floatValue(), priority, timeoutMs);
+        } else if (pc.objectType == BACnetEnums.ObjectType.BINARY_LIGHTING_OUTPUT
+                && command instanceof OnOffType onOff) {
+            svc.writeEnumerated(addr, pc.objectType, pc.instance, BACnetEnums.Property.PRESENT_VALUE,
+                    onOff == OnOffType.ON ? 1 : 0, 8, timeoutMs);
         }
     }
 
@@ -457,7 +499,8 @@ public class BACnetDeviceHandler extends BaseThingHandler {
     }
 
     private State toState(int objectType, PropertyValue v) {
-        if (BACnetEnums.ObjectType.isBinary(objectType)) {
+        if (BACnetEnums.ObjectType.isBinary(objectType)
+                || objectType == BACnetEnums.ObjectType.BINARY_LIGHTING_OUTPUT) {
             return v.number != 0 ? OnOffType.ON : OnOffType.OFF;
         }
         switch (v.type) {

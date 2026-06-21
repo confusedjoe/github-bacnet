@@ -43,6 +43,17 @@ public final class BACnetEnums {
         public static final int MULTI_STATE_VALUE = 19;
         public static final int NOTIFICATION_CLASS = 15;
         public static final int SCHEDULE = 17;
+        // Additional value-bearing data-point object types
+        public static final int LOOP = 12;
+        public static final int AVERAGING = 18;
+        public static final int ACCUMULATOR = 23;
+        public static final int PULSE_CONVERTER = 24;
+        public static final int CHARACTERSTRING_VALUE = 40;
+        public static final int INTEGER_VALUE = 45;
+        public static final int LARGE_ANALOG_VALUE = 46;
+        public static final int POSITIVE_INTEGER_VALUE = 48;
+        public static final int LIGHTING_OUTPUT = 54;
+        public static final int BINARY_LIGHTING_OUTPUT = 55;
 
         private ObjectType() {
         }
@@ -62,6 +73,16 @@ public final class BACnetEnums {
                 case MULTI_STATE_VALUE: return "msv";
                 case NOTIFICATION_CLASS: return "nc";
                 case SCHEDULE: return "schedule";
+                case LOOP: return "loop";
+                case AVERAGING: return "avg";
+                case ACCUMULATOR: return "acc";
+                case PULSE_CONVERTER: return "pconv";
+                case CHARACTERSTRING_VALUE: return "csv";
+                case INTEGER_VALUE: return "iv";
+                case LARGE_ANALOG_VALUE: return "lav";
+                case POSITIVE_INTEGER_VALUE: return "piv";
+                case LIGHTING_OUTPUT: return "lo";
+                case BINARY_LIGHTING_OUTPUT: return "blo";
                 default: return "type" + t;
             }
         }
@@ -80,7 +101,9 @@ public final class BACnetEnums {
 
         public static boolean isWritable(int t) {
             return t == ANALOG_OUTPUT || t == ANALOG_VALUE || t == BINARY_OUTPUT || t == BINARY_VALUE
-                    || t == MULTI_STATE_OUTPUT || t == MULTI_STATE_VALUE || t == SCHEDULE;
+                    || t == MULTI_STATE_OUTPUT || t == MULTI_STATE_VALUE || t == SCHEDULE
+                    || t == LARGE_ANALOG_VALUE || t == INTEGER_VALUE || t == POSITIVE_INTEGER_VALUE
+                    || t == LIGHTING_OUTPUT || t == BINARY_LIGHTING_OUTPUT;
         }
     }
 

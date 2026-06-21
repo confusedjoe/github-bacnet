@@ -100,6 +100,13 @@
         <description>Multi-state present value.</description>
     </channel-type>
 
+    <channel-type id="stringValue">
+        <item-type>String</item-type>
+        <label>Text Value</label>
+        <description>Read-only character-string present value.</description>
+        <state readOnly="true"/>
+    </channel-type>
+
     <channel-type id="alarm">
         <kind>trigger</kind>
         <label>Alarm</label>

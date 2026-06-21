@@ -109,7 +109,7 @@ Bridge bacnet:bridge:local "BACnet/IP Network" [ broadcastAddress="192.168.1.255
 ## Installation
 
 **Option A – manual JAR (quickest):**
-Download `org.openhab.binding.bacnet-0.7.0.jar` from the
+Download `org.openhab.binding.bacnet-0.7.3.jar` from the
 [Releases](../../releases) page and drop it into your openHAB `addons` folder.
 
 **Option B – openHAB Community Marketplace:**
@@ -130,7 +130,7 @@ mvn clean install -pl :org.openhab.binding.bacnet -am -DskipTests
 ```
 
 The resulting bundle is at
-`bundles/org.openhab.binding.bacnet/target/org.openhab.binding.bacnet-0.7.0.jar`.
+`bundles/org.openhab.binding.bacnet/target/org.openhab.binding.bacnet-0.7.3.jar`.
 
 ## Technical documentation
 
@@ -138,6 +138,22 @@ For the protocol subset, the single-reader socket design, discovery internals,
 the service layer and the build/test setup, see **[ARCHITECTURE.md](ARCHITECTURE.md)**.
 
 ## Changelog
+
+### 0.7.1 – 0.7.3
+
+- **More object types.** In addition to Analog/Binary/Multi-State, Schedule and
+  Calendar, the binding now maps the other value-bearing types: Loop, Averaging,
+  Accumulator, Pulse-Converter (read-only Number), Large-Analog/Integer/
+  Positive-Integer-Value (writable Number), CharacterString-Value (String),
+  Lighting-Output (Number) and Binary-Lighting-Output (Switch). Pure infrastructure
+  objects (Device, File, Program, Trend-Log, Notification-Class, …) are skipped.
+- **Comprehensive, sortable tags** on every auto-created Item: object type
+  (`AnalogValue`, `Accumulator`, …), access (`Writable`/`ReadOnly`), openHAB
+  semantic class (`Measurement`/`Setpoint`/`Switch`/`Status`), physical quantity
+  (`Temperature`/`Pressure`/`Power`/`Energy`/…), the unit (`°C`, `Pa`, `kWh`, …) and
+  the device (`Device_<instance>`). Engineering-units table expanded (ASHRAE 135).
+- **Items are also created for devices discovered earlier** (existing channels) and
+  re-tagged in place on each start.
 
 ### 0.7.0
 
