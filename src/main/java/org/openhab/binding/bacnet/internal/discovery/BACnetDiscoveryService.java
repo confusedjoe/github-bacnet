@@ -29,127 +29,103 @@ import org.openhab.binding.bacnet.internal.BACnetBindingConstants;
 import org.openhab.binding.bacnet.internal.handler.BACnetBridgeHandler;
 import org.openhab.binding.bacnet.internal.protocol.BACnetIpClient;
 import org.openhab.binding.bacnet.internal.protocol.BACnetServices;
-import org.openhab.core.config.discovery.AbstractThingHandlerDiscoveryService;
+import org.openhab.core.config.discovery.AbstractDiscoveryService;
 import org.openhab.core.config.discovery.DiscoveryResultBuilder;
 import org.openhab.core.thing.ThingUID;
-import org.osgi.service.component.annotations.Component;
-import org.osgi.service.component.annotations.ServiceScope;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Universal BACnet device discovery. Combines several mechanisms so that even
- * devices that never answer a broadcast Who-Is are found:
+ * Universal BACnet device discovery, registered per bridge by
+ * {@link org.openhab.binding.bacnet.internal.BACnetHandlerFactory}. Combines
+ * several mechanisms so that even devices that never answer a broadcast Who-Is
+ * are found:
  *
  * <ol>
  *   <li><b>Who-Is / I-Am</b> — the standard broadcast discovery.</li>
- *   <li><b>Passive</b> — every IP that has sent the bridge any BACnet frame
- *       (e.g. a controller that broadcasts its own Who-Is) is probed.</li>
- *   <li><b>Active sweep</b> — every host in the bridge's subnet is probed with a
- *       unicast {@code ReadProperty(device:4194303, object-identifier)}, the
- *       wildcard-instance trick that silent devices still answer.</li>
- *   <li><b>Event-driven</b> — the moment a previously-unseen IP sends any BACnet
- *       frame, it is probed immediately (see {@link #onNewSource}).</li>
+ *   <li><b>Passive</b> — every IP that has sent the bridge any BACnet frame is probed.</li>
+ *   <li><b>Active sweep</b> — every host in the bridge's /24 subnet is probed with a
+ *       unicast {@code ReadProperty(device:4194303, object-identifier)}.</li>
+ *   <li><b>Event-driven</b> — a previously-unseen IP is probed the moment it sends a frame.</li>
  * </ol>
  *
- * Runs as <b>background discovery</b>: an initial scan starts shortly after the
- * bridge comes online and repeats on a configurable interval, so devices land in
- * the inbox without any manual scan. Probed devices are reported with their real
- * device instance and IP, so the Thing works over unicast without Who-Is.
+ * Runs as background discovery: an initial scan starts shortly after the bridge
+ * is up and repeats on a configurable interval.
  *
  * @author Edin - Initial contribution
  */
-@Component(scope = ServiceScope.PROTOTYPE, service = BACnetDiscoveryService.class)
 @NonNullByDefault
-public class BACnetDiscoveryService extends AbstractThingHandlerDiscoveryService<BACnetBridgeHandler> {
+public class BACnetDiscoveryService extends AbstractDiscoveryService {
 
     private static final int SWEEP_THREADS = 32;
     private static final int PROBE_TIMEOUT_MS = 1200;
     private static final long INITIAL_DELAY_S = 15; // let the bridge finish coming online
 
     private final Logger logger = LoggerFactory.getLogger(BACnetDiscoveryService.class);
+    private final BACnetBridgeHandler handler;
     private final Set<Integer> discoveredInstances = ConcurrentHashMap.newKeySet();
     private final Consumer<String> newSourceListener = this::onNewSource;
 
     private @Nullable ScheduledFuture<?> backgroundJob;
     private volatile boolean listenerRegistered = false;
 
-    public BACnetDiscoveryService() {
-        // last arg = background discovery enabled by default
-        super(BACnetBridgeHandler.class, Set.of(BACnetBindingConstants.THING_TYPE_DEVICE), 90, true);
+    public BACnetDiscoveryService(BACnetBridgeHandler handler) {
+        super(Set.of(BACnetBindingConstants.THING_TYPE_DEVICE), 90, true);
+        this.handler = handler;
     }
 
-    // ---------- lifecycle ----------
-    // AbstractThingHandlerDiscoveryService does NOT auto-invoke startBackgroundDiscovery()
-    // on activation, so we hook it into initialize() (called once the bridge handler is set)
-    // and tear it down in dispose().
-
-    @Override
-    public void initialize() {
-        super.initialize();
+    /** Called by the handler factory right after the bridge handler is created. */
+    public void start() {
         startBackgroundDiscovery();
     }
 
-    @Override
-    public void dispose() {
+    /** Called by the handler factory when the bridge handler is removed. */
+    public void stop() {
         stopBackgroundDiscovery();
-        super.dispose();
     }
 
     // ---------- background discovery ----------
 
     @Override
     protected void startBackgroundDiscovery() {
-        // NOTE: this is invoked by both activate() and initialize() of the base
-        // class. activate() may run before the thing handler is injected, so guard
-        // against a null handler — otherwise the NPE would abort service activation
-        // and silently kill all discovery.
-        try {
-            BACnetBridgeHandler handler = thingHandler;
-            if (!handler.isBackgroundDiscovery()) {
-                return;
-            }
-            stopBackgroundDiscovery();
-            int minutes = Math.max(1, handler.getDiscoveryInterval());
-            backgroundJob = scheduler.scheduleWithFixedDelay(this::backgroundScan, INITIAL_DELAY_S, minutes * 60L,
-                    TimeUnit.SECONDS);
-            logger.info("BACnet background discovery active (first run in {}s, then every {} min)", INITIAL_DELAY_S,
-                    minutes);
-        } catch (RuntimeException e) {
-            // handler not ready yet — initialize() will call us again once it is
-            logger.debug("startBackgroundDiscovery deferred: {}", e.toString());
+        if (!handler.isBackgroundDiscovery()) {
+            return;
         }
+        cancelJob();
+        int minutes = Math.max(1, handler.getDiscoveryInterval());
+        backgroundJob = scheduler.scheduleWithFixedDelay(this::backgroundScan, INITIAL_DELAY_S, minutes * 60L,
+                TimeUnit.SECONDS);
+        logger.info("BACnet background discovery active (first run in {}s, then every {} min)", INITIAL_DELAY_S,
+                minutes);
     }
 
     @Override
     protected void stopBackgroundDiscovery() {
-        ScheduledFuture<?> job = backgroundJob;
-        if (job != null) {
-            job.cancel(true);
-            backgroundJob = null;
-        }
+        cancelJob();
         if (listenerRegistered) {
-            try {
-                BACnetIpClient client = thingHandler.getClient();
-                if (client != null) {
-                    client.removeNewSourceListener(newSourceListener);
-                }
-            } catch (RuntimeException ignored) {
-                // handler already gone
+            BACnetIpClient client = handler.getClient();
+            if (client != null) {
+                client.removeNewSourceListener(newSourceListener);
             }
             listenerRegistered = false;
         }
     }
 
-    /** Periodic background task: ensure the new-source listener is wired, then scan. */
+    private void cancelJob() {
+        ScheduledFuture<?> job = backgroundJob;
+        if (job != null) {
+            job.cancel(true);
+            backgroundJob = null;
+        }
+    }
+
+    /** Periodic task: wire the new-source listener (once the bridge is up), then scan. */
     private void backgroundScan() {
-        // Must not throw: scheduleWithFixedDelay silently cancels all future runs
-        // if a task throws, so swallow + log instead.
         try {
-            BACnetIpClient client = thingHandler.getClient();
+            BACnetIpClient client = handler.getClient();
             if (client == null) {
                 logger.debug("Background scan skipped — bridge not ready yet");
-                return; // bridge not ready yet — try again next interval
+                return;
             }
             if (!listenerRegistered) {
                 client.addNewSourceListener(newSourceListener);
@@ -163,7 +139,6 @@ public class BACnetDiscoveryService extends AbstractThingHandlerDiscoveryService
 
     /** A previously-unseen IP just sent us a frame — probe it right away. */
     private void onNewSource(String ip) {
-        BACnetBridgeHandler handler = thingHandler;
         BACnetIpClient client = handler.getClient();
         if (client == null) {
             return;
@@ -172,39 +147,36 @@ public class BACnetDiscoveryService extends AbstractThingHandlerDiscoveryService
         if (svc == null) {
             return;
         }
-        scheduler.execute(() -> probe(handler, svc, ip));
+        scheduler.execute(() -> probe(svc, ip));
     }
 
     // ---------- full scan (manual + periodic) ----------
 
     @Override
     protected void startScan() {
-        BACnetBridgeHandler handler = thingHandler;
         BACnetIpClient client = handler.getClient();
         if (client == null) {
-            logger.warn("Cannot scan: BACnet client not available (bridge offline?)");
+            logger.warn("Cannot scan: BACnet bridge offline");
             return;
         }
         BACnetServices svc = client.getServices();
         if (svc == null) {
-            logger.warn("Cannot scan: BACnet services not available");
+            logger.warn("Cannot scan: BACnet services unavailable");
             return;
         }
         discoveredInstances.clear();
         Set<String> probedAddresses = ConcurrentHashMap.newKeySet();
 
-        // 1) Standard Who-Is / I-Am.
         try {
             client.sendWhoIs();
             client.receiveIAm(handler.getDiscoveryTimeout(), dev -> {
                 probedAddresses.add(dev.address);
-                emit(handler, dev.instance, dev.address, null);
+                emit(dev.instance, dev.address, null);
             });
         } catch (IOException e) {
             logger.warn("Who-Is broadcast failed: {}", e.getMessage());
         }
 
-        // 2) + 3) Candidate IPs: everything we have heard from, plus the subnet sweep.
         Set<String> candidates = new LinkedHashSet<>();
         candidates.addAll(client.getSeenSources());
         candidates.addAll(sweepHosts(handler.getBroadcastAddress()));
@@ -219,7 +191,7 @@ public class BACnetDiscoveryService extends AbstractThingHandlerDiscoveryService
         ExecutorService pool = Executors.newFixedThreadPool(SWEEP_THREADS);
         try {
             for (String ip : candidates) {
-                pool.submit(() -> probe(handler, svc, ip));
+                pool.submit(() -> probe(svc, ip));
             }
             pool.shutdown();
             pool.awaitTermination(80, TimeUnit.SECONDS);
@@ -231,7 +203,7 @@ public class BACnetDiscoveryService extends AbstractThingHandlerDiscoveryService
     }
 
     /** Probe one IP for a BACnet device via the wildcard-instance ReadProperty. */
-    private void probe(BACnetBridgeHandler handler, BACnetServices svc, String ip) {
+    private void probe(BACnetServices svc, String ip) {
         try {
             InetAddress addr = InetAddress.getByName(ip);
             int[] oid = svc.readDeviceObjectId(addr, PROBE_TIMEOUT_MS);
@@ -240,16 +212,16 @@ public class BACnetDiscoveryService extends AbstractThingHandlerDiscoveryService
             }
             int instance = oid[1];
             String name = svc.readObjectName(addr, 8, instance, PROBE_TIMEOUT_MS);
-            emit(handler, instance, ip, name);
+            emit(instance, ip, name);
         } catch (Exception e) {
             logger.trace("Probe of {} failed: {}", ip, e.getMessage());
         }
     }
 
     /** Report a discovered device, de-duplicated by device instance. */
-    private synchronized void emit(BACnetBridgeHandler handler, int instance, String address, @Nullable String name) {
+    private synchronized void emit(int instance, String address, @Nullable String name) {
         if (!discoveredInstances.add(instance)) {
-            return; // already reported in this cycle
+            return;
         }
         ThingUID bridgeUID = handler.getThing().getUID();
         ThingUID thingUID = new ThingUID(BACnetBindingConstants.THING_TYPE_DEVICE, bridgeUID,
@@ -265,8 +237,7 @@ public class BACnetDiscoveryService extends AbstractThingHandlerDiscoveryService
 
     /**
      * Expand a subnet broadcast address into the list of host addresses to sweep.
-     * Only the common /24 case (x.y.z.255) is expanded into x.y.z.1 .. x.y.z.254;
-     * other masks fall back to passive discovery only.
+     * Only the common /24 case (x.y.z.255) is expanded into x.y.z.1 .. x.y.z.254.
      */
     private Set<String> sweepHosts(@Nullable String broadcast) {
         Set<String> hosts = new LinkedHashSet<>();

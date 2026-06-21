@@ -14,20 +14,16 @@ package org.openhab.binding.bacnet.internal.handler;
 
 import java.io.IOException;
 import java.net.InetAddress;
-import java.util.Collection;
-import java.util.Set;
 
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
 import org.openhab.binding.bacnet.internal.BACnetBindingConstants;
-import org.openhab.binding.bacnet.internal.discovery.BACnetDiscoveryService;
 import org.openhab.binding.bacnet.internal.protocol.BACnetIpClient;
 import org.openhab.core.thing.Bridge;
 import org.openhab.core.thing.ChannelUID;
 import org.openhab.core.thing.ThingStatus;
 import org.openhab.core.thing.ThingStatusDetail;
 import org.openhab.core.thing.binding.BaseBridgeHandler;
-import org.openhab.core.thing.binding.ThingHandlerService;
 import org.openhab.core.types.Command;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -122,10 +118,5 @@ public class BACnetBridgeHandler extends BaseBridgeHandler {
     /** Background re-scan interval in minutes. */
     public int getDiscoveryInterval() {
         return discoveryInterval;
-    }
-
-    @Override
-    public Collection<Class<? extends ThingHandlerService>> getServices() {
-        return Set.of(BACnetDiscoveryService.class);
     }
 }
