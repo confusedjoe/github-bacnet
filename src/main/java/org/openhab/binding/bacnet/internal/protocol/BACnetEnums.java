@@ -110,7 +110,7 @@ public final class BACnetEnums {
         }
     }
 
-    /** Engineering units (BACnetEngineeringUnits) — symbol for the common ones. */
+    /** Engineering units (BACnetEngineeringUnits, ASHRAE 135 Clause 21). */
     public static final class Units {
         public static final int DEGREES_CELSIUS = 62;
         public static final int DEGREES_KELVIN = 63;
@@ -123,10 +123,64 @@ public final class BACnetEnums {
         /** Short symbol for a unit code, or "" if not mapped. */
         public static String symbol(int u) {
             switch (u) {
-                case DEGREES_CELSIUS: return "°C";
-                case DEGREES_KELVIN: return "K";
-                case DEGREES_FAHRENHEIT: return "°F";
-                case PERCENT: return "%";
+                case 62: return "°C";
+                case 63: return "K";
+                case 64: return "°F";
+                case 53: return "Pa";
+                case 54: return "kPa";
+                case 55: return "bar";
+                case 98: return "%";
+                case 29: return "%rH";
+                case 5: return "V";
+                case 6: return "kV";
+                case 124: return "mV";
+                case 3: return "A";
+                case 2: return "mA";
+                case 167: return "A/m";
+                case 47: return "W";
+                case 48: return "kW";
+                case 18: return "Wh";
+                case 19: return "kWh";
+                case 17: return "kJ";
+                case 126: return "MJ";
+                case 27: return "Hz";
+                case 37: return "lx";
+                case 96: return "ppm";
+                case 87: return "l/s";
+                case 136: return "l/h";
+                case 135: return "m³/h";
+                case 80: return "m³";
+                case 82: return "l";
+                case 74: return "m/s";
+                case 90: return "°";
+                case 103: return "rad";
+                case 71: return "h";
+                case 72: return "min";
+                case 73: return "s";
+                case 253: return "Pa·s";
+                default: return "";
+            }
+        }
+
+        /** Physical-quantity tag for a unit symbol (for sorting), or "" if none. */
+        public static String quantity(String symbol) {
+            switch (symbol) {
+                case "°C": case "K": case "°F": return "Temperature";
+                case "Pa": case "kPa": case "bar": return "Pressure";
+                case "%rH": return "Humidity";
+                case "%": return "Percent";
+                case "V": case "kV": case "mV": return "Voltage";
+                case "A": case "mA": return "Current";
+                case "W": case "kW": return "Power";
+                case "Wh": case "kWh": case "kJ": case "MJ": return "Energy";
+                case "Hz": return "Frequency";
+                case "lx": return "Illuminance";
+                case "ppm": return "Concentration";
+                case "l/s": case "l/h": case "m³/h": return "Flow";
+                case "m³": case "l": return "Volume";
+                case "m/s": return "Speed";
+                case "°": case "rad": return "Angle";
+                case "h": case "min": case "s": return "Duration";
                 default: return "";
             }
         }

@@ -161,29 +161,25 @@ public class BACnetDeviceHandler extends BaseThingHandler {
             org.openhab.core.thing.Channel existing = getThing().getChannel(channelId);
 
             String label;
-            boolean isTemperature;
+            String unitSymbol;
             if (existing != null) {
                 // Channel already exists (persisted thing) — reuse its label, no re-read.
                 String existingLabel = existing.getLabel();
                 label = existingLabel != null ? existingLabel : channelId;
-                isTemperature = label.contains("°C") || label.contains("°F") || label.contains("[K]");
+                unitSymbol = extractUnit(label);
             } else {
                 // New channel — read object name + unit, build value + alarm channels.
                 org.openhab.core.thing.type.ChannelTypeUID ctuid = new org.openhab.core.thing.type.ChannelTypeUID(
                         BACnetBindingConstants.BINDING_ID, channelTypeId);
                 String objName = svc.readObjectName(addr, type, inst, timeoutMs);
                 label = (objName != null && !objName.isBlank()) ? objName : channelId;
-                isTemperature = false;
+                unitSymbol = "";
                 if (BACnetEnums.ObjectType.isAnalog(type) || type == BACnetEnums.ObjectType.SCHEDULE) {
                     PropertyValue u = svc.readProperty(addr, type, inst, BACnetEnums.Property.UNITS, timeoutMs);
-                    int unitCode = u != null ? (int) u.number : -1;
-                    String unit = BACnetEnums.Units.symbol(unitCode);
-                    if (!unit.isEmpty()) {
-                        label = label + " [" + unit + "]";
+                    unitSymbol = u != null ? BACnetEnums.Units.symbol((int) u.number) : "";
+                    if (!unitSymbol.isEmpty()) {
+                        label = label + " [" + unitSymbol + "]";
                     }
-                    isTemperature = unitCode == BACnetEnums.Units.DEGREES_CELSIUS
-                            || unitCode == BACnetEnums.Units.DEGREES_FAHRENHEIT
-                            || unitCode == BACnetEnums.Units.DEGREES_KELVIN;
                 }
                 builder.withChannel(org.openhab.core.thing.binding.builder.ChannelBuilder.create(cuid).withType(ctuid)
                         .withLabel(label).build());
@@ -200,7 +196,7 @@ public class BACnetDeviceHandler extends BaseThingHandler {
 
             // Auto-create the Item + link — also for channels that already existed.
             if (autoCreateItems) {
-                createItemAndLink(type, channelTypeId, cuid, channelId, label, isTemperature);
+                createItemAndLink(type, channelTypeId, cuid, channelId, label, unitSymbol);
             }
 
             // (Re)subscribe to COV for live updates on this object.
@@ -235,16 +231,18 @@ public class BACnetDeviceHandler extends BaseThingHandler {
     // ---------- automatic item creation (semantic, BACnet-derived) ----------
 
     private void createItemAndLink(int objectType, String channelTypeId, ChannelUID channelUID, String channelId,
-            String label, boolean isTemperature) {
+            String label, String unitSymbol) {
         String itemName = itemNameFor(channelId);
         try {
-            if (!itemExists(itemName)) {
-                GenericItem item = newItem(channelTypeId, itemName);
-                if (item == null) {
-                    return;
-                }
-                item.setLabel(label);
-                item.addTags(tagsFor(objectType, isTemperature));
+            GenericItem item = newItem(channelTypeId, itemName);
+            if (item == null) {
+                return;
+            }
+            item.setLabel(label);
+            item.addTags(tagsFor(objectType, unitSymbol));
+            if (itemExists(itemName)) {
+                itemProvider.update(item); // refresh label + tags in place
+            } else {
                 itemProvider.add(item);
             }
             // add() throws if the link already exists — harmless, keeps it idempotent
@@ -278,22 +276,61 @@ public class BACnetDeviceHandler extends BaseThingHandler {
         }
     }
 
-    /** Semantic tags derived from the BACnet object type (and unit for temperature). */
-    private Set<String> tagsFor(int objectType, boolean isTemperature) {
+    /**
+     * Comprehensive, sortable tags derived from BACnet: object type, access,
+     * openHAB semantic point class, physical quantity + unit, and the device.
+     */
+    private Set<String> tagsFor(int objectType, String unitSymbol) {
         Set<String> tags = new HashSet<>();
-        if (BACnetEnums.ObjectType.isAnalog(objectType)) {
-            tags.add(BACnetEnums.ObjectType.isWritable(objectType) ? "Setpoint" : "Measurement");
-            if (isTemperature) {
-                tags.add("Temperature");
-            }
+        // 1. precise object type, e.g. "AnalogValue"
+        tags.add(objectTypeTag(objectType));
+        // 2. access
+        tags.add(BACnetEnums.ObjectType.isWritable(objectType) ? "Writable" : "ReadOnly");
+        // 3. openHAB semantic point class
+        if (BACnetEnums.ObjectType.isAnalog(objectType) || objectType == BACnetEnums.ObjectType.SCHEDULE) {
+            tags.add(BACnetEnums.ObjectType.isWritable(objectType) || objectType == BACnetEnums.ObjectType.SCHEDULE
+                    ? "Setpoint"
+                    : "Measurement");
         } else if (BACnetEnums.ObjectType.isBinary(objectType)) {
             tags.add(BACnetEnums.ObjectType.isWritable(objectType) ? "Switch" : "Status");
-        } else if (objectType == BACnetEnums.ObjectType.SCHEDULE) {
-            tags.add("Setpoint");
         } else {
             tags.add("Status"); // multi-state, calendar, ...
         }
+        // 4. + 5. physical quantity and unit (from the engineering unit)
+        if (!unitSymbol.isEmpty()) {
+            tags.add(unitSymbol);
+            String quantity = BACnetEnums.Units.quantity(unitSymbol);
+            if (!quantity.isEmpty()) {
+                tags.add(quantity);
+            }
+        }
+        // 6. group by device/controller
+        tags.add("Device_" + deviceInstance);
         return tags;
+    }
+
+    private String objectTypeTag(int t) {
+        switch (t) {
+            case BACnetEnums.ObjectType.ANALOG_INPUT: return "AnalogInput";
+            case BACnetEnums.ObjectType.ANALOG_OUTPUT: return "AnalogOutput";
+            case BACnetEnums.ObjectType.ANALOG_VALUE: return "AnalogValue";
+            case BACnetEnums.ObjectType.BINARY_INPUT: return "BinaryInput";
+            case BACnetEnums.ObjectType.BINARY_OUTPUT: return "BinaryOutput";
+            case BACnetEnums.ObjectType.BINARY_VALUE: return "BinaryValue";
+            case BACnetEnums.ObjectType.MULTI_STATE_INPUT: return "MultiStateInput";
+            case BACnetEnums.ObjectType.MULTI_STATE_OUTPUT: return "MultiStateOutput";
+            case BACnetEnums.ObjectType.MULTI_STATE_VALUE: return "MultiStateValue";
+            case BACnetEnums.ObjectType.SCHEDULE: return "Schedule";
+            case BACnetEnums.ObjectType.CALENDAR: return "Calendar";
+            default: return "BACnetObject";
+        }
+    }
+
+    /** Extract the unit symbol from a label like "Name [°C]" (or "" if none). */
+    private String extractUnit(String label) {
+        int a = label.lastIndexOf('[');
+        int b = label.lastIndexOf(']');
+        return (a >= 0 && b > a) ? label.substring(a + 1, b) : "";
     }
 
     private String itemNameFor(String channelId) {
