@@ -1,0 +1,13 @@
+// BACnet/IP — nur die Bridge ist fest definiert.
+// Geraete werden automatisch per Hintergrund-Discovery gefunden und (bei
+// aktivierter Auto-Genehmigung) als Thing angelegt. Die Bridge selbst kann nicht
+// auto-erstellt werden und bleibt deshalb hier.
+// dieses File muss in den Ordner conf/things/
+
+//BACnet/IP — only the bridge is permanently defined. 
+//Devices are automatically found via background discovery and created as a Thing (if auto-approval is enabled). 
+//The bridge itself cannot be auto-created and therefore remains here.
+// This file must be placed in the conf/things/ folder.
+
+
+Bridge bacnet:bridge:local "BACnet/IP Network" [ broadcastAddress="192.168.31.255", localPort=47808, discoveryTimeout=5 ]
