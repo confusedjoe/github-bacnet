@@ -109,7 +109,7 @@ Bridge bacnet:bridge:local "BACnet/IP Network" [ broadcastAddress="192.168.1.255
 ## Installation
 
 **Option A – manual JAR (quickest):**
-Download `org.openhab.binding.bacnet-0.8.1.jar` from the
+Download `org.openhab.binding.bacnet-0.8.2.jar` from the
 [Releases](../../releases) page and drop it into your openHAB `addons` folder.
 
 **Option B – openHAB Community Marketplace:**
@@ -130,7 +130,7 @@ mvn clean install -pl :org.openhab.binding.bacnet -am -DskipTests
 ```
 
 The resulting bundle is at
-`bundles/org.openhab.binding.bacnet/target/org.openhab.binding.bacnet-0.8.1.jar`.
+`bundles/org.openhab.binding.bacnet/target/org.openhab.binding.bacnet-0.8.2.jar`.
 
 ## Technical documentation
 
@@ -138,6 +138,11 @@ For the protocol subset, the single-reader socket design, discovery internals,
 the service layer and the build/test setup, see **[ARCHITECTURE.md](ARCHITECTURE.md)**.
 
 ## Changelog
+
+### 0.8.2
+
+- Two more tags on every item: the BACnet device **instance number** (`Instance_<n>`)
+  and a generic **`BACnet`** marker, for easier filtering/sorting.
 
 ### 0.8.1
 

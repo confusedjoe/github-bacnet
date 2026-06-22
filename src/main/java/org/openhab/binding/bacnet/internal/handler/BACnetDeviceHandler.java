@@ -379,6 +379,9 @@ public class BACnetDeviceHandler extends BaseThingHandler {
         if (!category.isEmpty()) {
             tags.add(category);
         }
+        // 8. BACnet device instance number + generic binding marker
+        tags.add("Instance_" + deviceInstance);
+        tags.add("BACnet");
         return tags;
     }
 
@@ -394,6 +397,8 @@ public class BACnetDeviceHandler extends BaseThingHandler {
             if (!category.isEmpty()) {
                 tags.add(category);
             }
+            tags.add("Instance_" + deviceInstance);
+            tags.add("BACnet");
             item.addTags(tags);
             if (itemExists(itemName)) {
                 itemProvider.update(item);
