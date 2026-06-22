@@ -109,7 +109,7 @@ Bridge bacnet:bridge:local "BACnet/IP Network" [ broadcastAddress="192.168.1.255
 ## Installation
 
 **Option A – manual JAR (quickest):**
-Download `org.openhab.binding.bacnet-0.8.0.jar` from the
+Download `org.openhab.binding.bacnet-0.8.1.jar` from the
 [Releases](../../releases) page and drop it into your openHAB `addons` folder.
 
 **Option B – openHAB Community Marketplace:**
@@ -130,7 +130,7 @@ mvn clean install -pl :org.openhab.binding.bacnet -am -DskipTests
 ```
 
 The resulting bundle is at
-`bundles/org.openhab.binding.bacnet/target/org.openhab.binding.bacnet-0.8.0.jar`.
+`bundles/org.openhab.binding.bacnet/target/org.openhab.binding.bacnet-0.8.1.jar`.
 
 ## Technical documentation
 
@@ -138,6 +138,14 @@ For the protocol subset, the single-reader socket design, discovery internals,
 the service layer and the build/test setup, see **[ARCHITECTURE.md](ARCHITECTURE.md)**.
 
 ## Changelog
+
+### 0.8.1
+
+- **COV-first, less polling.** Present values are driven by COV (push); the
+  fallback poll is now every `pollInterval` minutes (default 5, was 30 s).
+- **Periodic metadata refresh** (`refreshInterval`, default 60 min, 0 = off):
+  re-reads the object-list and metadata so new or renamed objects are picked up
+  and COV subscriptions are renewed — instead of caching once.
 
 ### 0.8.0
 

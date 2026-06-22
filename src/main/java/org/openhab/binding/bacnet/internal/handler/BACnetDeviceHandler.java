@@ -73,8 +73,11 @@ public class BACnetDeviceHandler extends BaseThingHandler {
     private @Nullable InetAddress address;
     private @Nullable BACnetServices services;
     private @Nullable ScheduledFuture<?> pollJob;
+    private @Nullable ScheduledFuture<?> refreshJob;
     private int timeoutMs = 3000;
     private boolean autoCreateItems = true;
+    private int pollIntervalMin = 5; // present-value fallback poll (COV is primary)
+    private int refreshIntervalMin = 60; // re-read object-list + metadata (new/renamed objects)
     private String deviceTag = "";
 
     private final ManagedItemProvider itemProvider;
@@ -99,6 +102,14 @@ public class BACnetDeviceHandler extends BaseThingHandler {
         Object autoObj = getConfig().get(BACnetBindingConstants.CONFIG_AUTO_CREATE_ITEMS);
         if (autoObj instanceof Boolean) {
             autoCreateItems = (Boolean) autoObj;
+        }
+        Object pollObj = getConfig().get(BACnetBindingConstants.CONFIG_POLL_INTERVAL);
+        if (pollObj instanceof Number) {
+            pollIntervalMin = Math.max(1, ((Number) pollObj).intValue());
+        }
+        Object refreshObj = getConfig().get(BACnetBindingConstants.CONFIG_REFRESH_INTERVAL);
+        if (refreshObj instanceof Number) {
+            refreshIntervalMin = ((Number) refreshObj).intValue();
         }
         deviceInstance = inst instanceof Number ? ((Number) inst).intValue() : -1;
         if (deviceInstance < 0 || addr == null || addr.isBlank()) {
@@ -131,8 +142,15 @@ public class BACnetDeviceHandler extends BaseThingHandler {
         // Discover the device's objects, build channels, and subscribe to COV.
         scheduler.execute(this::buildChannelsAndSubscribe);
 
-        // Poll every 30s as a fallback; COV provides faster live updates.
-        pollJob = scheduler.scheduleWithFixedDelay(this::pollAll, 5, 30, TimeUnit.SECONDS);
+        // Present-value fallback poll — COV (push) is primary; this is just a safety net.
+        pollJob = scheduler.scheduleWithFixedDelay(this::pollAll, pollIntervalMin, pollIntervalMin, TimeUnit.MINUTES);
+
+        // Periodic metadata refresh: re-read the object-list + names/units/notification-class
+        // so new or renamed objects are picked up (and COV subscriptions are renewed).
+        if (refreshIntervalMin > 0) {
+            refreshJob = scheduler.scheduleWithFixedDelay(this::buildChannelsAndSubscribe, refreshIntervalMin,
+                    refreshIntervalMin, TimeUnit.MINUTES);
+        }
     }
 
     private void buildChannelsAndSubscribe() {
@@ -453,6 +471,11 @@ public class BACnetDeviceHandler extends BaseThingHandler {
         if (job != null) {
             job.cancel(true);
             pollJob = null;
+        }
+        ScheduledFuture<?> rj = refreshJob;
+        if (rj != null) {
+            rj.cancel(true);
+            refreshJob = null;
         }
         Bridge bridge = getBridge();
         if (bridge != null && bridge.getHandler() instanceof BACnetBridgeHandler bh) {

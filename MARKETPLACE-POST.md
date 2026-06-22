@@ -61,7 +61,7 @@ installation), start a scan from the console: `discovery start bacnet`.
 3. Schedule write is numeric (REAL) only.
 
 ## Download
-https://github.com/confusedjoe/github-bacnet/releases/download/v0.8.0/org.openhab.binding.bacnet-0.8.0.jar
+https://github.com/confusedjoe/github-bacnet/releases/download/v0.8.1/org.openhab.binding.bacnet-0.8.1.jar
 
 Source code: https://github.com/confusedjoe/github-bacnet
 

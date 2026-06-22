@@ -65,6 +65,18 @@
                     °C objects). Items are removed again when the Thing is deleted.</description>
                 <default>true</default>
             </parameter>
+            <parameter name="pollInterval" type="integer" unit="min" min="1">
+                <label>Poll Interval (min)</label>
+                <description>Fallback poll of present values. COV (change-of-value push) is the primary update
+                    mechanism; this only catches missed notifications.</description>
+                <default>5</default>
+            </parameter>
+            <parameter name="refreshInterval" type="integer" unit="min" min="0">
+                <label>Metadata Refresh (min)</label>
+                <description>How often to re-read the object-list and metadata (names, units, notification class)
+                    so new or renamed objects are picked up and COV subscriptions are renewed. 0 = off.</description>
+                <default>60</default>
+            </parameter>
         </config-description>
     </thing-type>
 
